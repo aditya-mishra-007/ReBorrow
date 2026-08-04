@@ -7,7 +7,7 @@ import {
   ReactNode,
 } from 'react';
 import * as authApi from '@/api/authApi';
-import { TOKEN_STORAGE_KEY, getErrorMessage } from '@/lib/api';
+import { TOKEN_STORAGE_KEY } from '@/lib/api';
 import type { LoginPayload, RegisterPayload, User } from '@/types';
 
 /**

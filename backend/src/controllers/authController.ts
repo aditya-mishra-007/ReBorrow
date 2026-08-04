@@ -16,14 +16,12 @@ const generateToken = (userId: string): string => {
   const jwtSecret = process.env.JWT_SECRET;
 
   if (!jwtSecret) {
-    // This should never happen in a correctly configured environment,
-    // but we fail loudly rather than signing with `undefined`.
     throw new Error('JWT_SECRET is not defined in environment variables');
   }
 
-  return jwt.sign({ id: userId }, jwtSecret, {
-    expiresIn: process.env.JWT_EXPIRES_IN || '30d',
-  });
+  const expiresIn = (process.env.JWT_EXPIRES_IN || '30d') as jwt.SignOptions['expiresIn'];
+
+  return jwt.sign({ id: userId }, jwtSecret, { expiresIn });
 };
 
 /**

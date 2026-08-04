@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import * as assetApi from '@/api/assetApi';
@@ -39,7 +39,6 @@ const statusStyles: Record<AssetStatus, string> = {
 
 export default function AssetDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
 
   const [asset, setAsset] = useState<Asset | null>(null);

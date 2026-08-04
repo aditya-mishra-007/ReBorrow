@@ -69,7 +69,7 @@ if (process.env.NODE_ENV !== 'test') {
 
 // Useful for uptime monitoring, load balancer health checks, and
 // container orchestration (e.g., Kubernetes liveness probes).
-app.get('/api/health', (req: Request, res: Response) => {
+app.get('/api/health', (_req: Request, res: Response) => {
   res.status(200).json({
     success: true,
     message: 'ReBorrow API is running',
@@ -116,7 +116,7 @@ app.use((req: Request, res: Response) => {
  * arity, even though `next` is unused here.
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-app.use((err: Error, req: Request, res: Response, _next: NextFunction) => {
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   console.error('Unhandled error:', err);
 
   // express.json() throws a SyntaxError with a `body` property when
