@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
+import { getCategoryIcon } from '@/constants/categories';
 import * as assetApi from '@/api/assetApi';
 import * as borrowRequestApi from '@/api/borrowRequestApi';
 import { getErrorMessage } from '@/lib/api';
@@ -147,9 +148,7 @@ export default function AssetDetailPage() {
           </span>
         </div>
 
-        <span className="mb-4 inline-block rounded bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
-          {asset.category}
-        </span>
+        <CategoryBadge category={asset.category} />
 
         <p className="mb-6 whitespace-pre-wrap text-gray-700">{asset.description}</p>
 
@@ -243,5 +242,24 @@ export default function AssetDetailPage() {
         )}
       </div>
     </div>
+  );
+}
+
+
+
+/**
+ * CategoryBadge
+ * ------------------------------------------------------------------
+ * Icon + label badge for an asset's category. Matches the same
+ * component used on HomePage's AssetCard for visual consistency.
+ */
+function CategoryBadge({ category }: { category: string }) {
+  const Icon = getCategoryIcon(category);
+
+  return (
+    <span className="mb-4 inline-flex items-center gap-1.5 rounded bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
+      <Icon className="h-3.5 w-3.5" />
+      {category}
+    </span>
   );
 }

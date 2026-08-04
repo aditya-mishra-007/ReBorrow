@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { getCategoryIcon } from '@/constants/categories';
 import * as assetApi from '@/api/assetApi';
 import { getErrorMessage } from '@/lib/api';
 import { isPopulatedOwner, type Asset, type AssetStatus, type PaginationMeta } from '@/types';
@@ -199,11 +200,29 @@ function AssetCard({ asset }: { asset: Asset }) {
       <p className="mb-3 line-clamp-2 flex-1 text-sm text-gray-500">{asset.description}</p>
 
       <div className="flex items-center justify-between text-xs text-gray-400">
-        <span className="rounded bg-gray-100 px-2 py-1 font-medium text-gray-600">
-          {asset.category}
-        </span>
+        <CategoryBadge category={asset.category} />
         <span>Listed by {ownerName}</span>
       </div>
     </Link>
+  );
+}
+
+
+/**
+ * CategoryBadge
+ * ------------------------------------------------------------------
+ * Small reusable badge pairing a category's icon with its label.
+ * Used across AssetCard here, and identically in AssetDetailPage and
+ * MyAssetsPage, for a consistent visual language wherever a category
+ * is shown.
+ */
+function CategoryBadge({ category }: { category: string }) {
+  const Icon = getCategoryIcon(category);
+
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded bg-gray-100 px-2 py-1 font-medium text-gray-600">
+      <Icon className="h-3.5 w-3.5" />
+      {category}
+    </span>
   );
 }

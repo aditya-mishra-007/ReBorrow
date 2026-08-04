@@ -4,6 +4,7 @@ import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import * as assetApi from '@/api/assetApi';
 import { getErrorMessage } from '@/lib/api';
+import { CATEGORIES } from '@/constants/categories';
 import type { CreateAssetPayload } from '@/types';
 
 /**
@@ -23,18 +24,7 @@ import type { CreateAssetPayload } from '@/types';
 // <datalist> rather than a rigid <select> so users can still type a
 // custom category if none of these fit — the backend has no enum
 // constraint on category, so the frontend shouldn't impose one either.
-const SUGGESTED_CATEGORIES = [
-  'Tools',
-  'Electronics',
-  'Sports & Outdoors',
-  'Books',
-  'Kitchen & Appliances',
-  'Furniture',
-  'Vehicles',
-  'Camping & Travel',
-  'Games & Toys',
-  'Other',
-];
+
 
 export default function CreateAssetPage() {
   const navigate = useNavigate();
@@ -91,27 +81,28 @@ export default function CreateAssetPage() {
             {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
           </div>
 
-          {/* --- Category field (free text + suggestions) --- */}
+          {/* --- Category field (icon-labeled dropdown) --- */}
           <div>
             <label htmlFor="category" className="block text-sm font-medium text-gray-700">
               Category
             </label>
-            <input
+            <select
               id="category"
-              type="text"
-              list="category-suggestions"
-              placeholder="e.g., Tools"
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus-visible:border-brand-500"
+              defaultValue=""
+              className="mt-1 w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm focus-visible:border-brand-500"
               {...register('category', {
-                required: 'Category is required',
-                maxLength: { value: 50, message: 'Category cannot exceed 50 characters' },
+                required: 'Please select a category',
               })}
-            />
-            <datalist id="category-suggestions">
-              {SUGGESTED_CATEGORIES.map((cat) => (
-                <option key={cat} value={cat} />
+            >
+              <option value="" disabled>
+                Select a category...
+              </option>
+              {CATEGORIES.map((cat) => (
+                <option key={cat.value} value={cat.value}>
+                  {cat.label}
+                </option>
               ))}
-            </datalist>
+            </select>
             {errors.category && (
               <p className="mt-1 text-sm text-red-600">{errors.category.message}</p>
             )}
