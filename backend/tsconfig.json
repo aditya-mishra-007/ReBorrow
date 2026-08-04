@@ -1,13 +1,46 @@
 {
   "compilerOptions": {
+    /* Language & Environment */
     "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
-    "rootDir": "./src",
+    "lib": ["ES2022"],
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "ignoreDeprecations": "6.0",
+    
+    /* Output */
     "outDir": "./dist",
-    "esModuleInterop": true,
+    "rootDir": "./src",
+    "sourceMap": true,
+    "declaration": false,
+
+    /* Type Checking - Strict Mode (full strictness for production safety) */
     "strict": true,
-    "skipLibCheck": true
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+
+    /* Interop & Compatibility */
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+
+    /* Emit */
+    "removeComments": true,
+
+    /* Type Roots */
+    "typeRoots": ["./node_modules/@types"]
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }

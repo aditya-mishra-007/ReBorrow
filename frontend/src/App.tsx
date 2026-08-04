@@ -1,74 +1,67 @@
-// frontend/src/App.tsx
-import { BrowserRouter as Router, Routes, Route, Navigate, Link } from 'react-router-dom';
-import { AuthProvider, useAuth } from './context/AuthContext';
-import Login from './components/Login';
-import Register from './components/Register';
-import Dashboard from './components/Dashboard';
-import ProtectedRoute from './components/ProtectedRoute';
-import AdminDashboard from './components/AdminDashboard';
+import { Routes, Route } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import { AuthProvider } from '@/context/AuthContext';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import Layout from '@/components/Layout';
 
-const Navbar: React.FC = () => {
-  const { user, isAuthenticated, logout } = useAuth();
+import HomePage from '@/pages/HomePage';
+import LoginPage from '@/pages/LoginPage';
+import RegisterPage from '@/pages/RegisterPage';
+import AssetDetailPage from '@/pages/AssetDetailPage';
+import CreateAssetPage from '@/pages/CreateAssetPage';
+import MyAssetsPage from '@/pages/MyAssetsPage';
+import MyRequestsPage from '@/pages/MyRequestsPage';
+import IncomingRequestsPage from '@/pages/IncomingRequestsPage';
+import NotFoundPage from '@/pages/NotFoundPage';
 
-  return (
-    <nav style={{ padding: '15px', background: '#333', color: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-      <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-        <Link to="/" style={{ color: '#fff', textDecoration: 'none', fontWeight: 'bold' }}>ReBorrow</Link>
-        {isAuthenticated && (
-          <Link to="/" style={{ color: '#fff', textDecoration: 'none' }}>Dashboard</Link>
-        )}
-        {/* Only show Admin panel link to admin users */}
-        {isAuthenticated && user?.role === 'admin' && (
-          <Link to="/admin" style={{ color: '#ffc107', textDecoration: 'none', fontWeight: 'bold' }}>Admin Panel</Link>
-        )}
-      </div>
-
-      <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-        {!isAuthenticated ? (
-          <>
-            <Link to="/login" style={{ color: '#fff', textDecoration: 'none' }}>Login</Link>
-            <Link to="/register" style={{ color: '#fff', textDecoration: 'none' }}>Register</Link>
-          </>
-        ) : (
-          <>
-            <span>Welcome, <strong>{user?.name}</strong> ({user?.role})</span>
-            <button 
-              onClick={logout} 
-              style={{ background: '#dc3545', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '4px', cursor: 'pointer' }}
-            >
-              Logout
-            </button>
-          </>
-        )}
-      </div>
-    </nav>
-  );
-};
-
+/**
+ * App.tsx
+ * ------------------------------------------------------------------
+ * Top-level route definitions and global providers.
+ *
+ * Access model (public browsing, auth wall on actions):
+ *   - Public:  home/browse assets, asset detail, login, register
+ *   - Private: create asset, my assets, my requests, incoming requests
+ *
+ * `AuthProvider` wraps the entire route tree so authentication state
+ * (current user, token, login/logout functions) is available anywhere
+ * via the `useAuth()` hook, regardless of route. `Toaster` is placed
+ * once here at the root so any component can call `toast.success(...)`
+ * / `toast.error(...)` without needing to render its own toast container.
+ */
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <Navbar />
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          duration: 4000,
+          style: {
+            fontSize: '14px',
+          },
+        }}
+      />
+      <Routes>
+        {/* Layout wraps every route with shared Navbar/Footer chrome */}
+        <Route element={<Layout />}>
+          {/* --- Public routes --- */}
+          <Route path="/" element={<HomePage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/assets/:id" element={<AssetDetailPage />} />
 
-          {/* Protected User Route */}
+          {/* --- Private routes (require authentication) --- */}
           <Route element={<ProtectedRoute />}>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/assets/new" element={<CreateAssetPage />} />
+            <Route path="/my-assets" element={<MyAssetsPage />} />
+            <Route path="/my-requests" element={<MyRequestsPage />} />
+            <Route path="/incoming-requests" element={<IncomingRequestsPage />} />
           </Route>
 
-          {/* Protected Admin Route */}
-          <Route element={<ProtectedRoute requiredRole="admin" />}>
-            <Route path="/admin" element={<AdminDashboard />} />
-          </Route>
-
-          {/* Fallback Route */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Router>
+          {/* --- Catch-all 404 --- */}
+          <Route path="*" element={<NotFoundPage />} />
+        </Route>
+      </Routes>
     </AuthProvider>
   );
 }
