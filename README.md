@@ -14,6 +14,8 @@ Built with the **MERN Stack (MongoDB, Express, React, Node.js)** using **TypeScr
 
 ---
 
+> **Note:** The backend is hosted on **Render's free tier**. If the application hasn't been used recently, the first request may take **30–60 seconds** to wake up. After that, the application responds normally.
+
 ## 🛠️ Tech Stack
 
 ### Backend
