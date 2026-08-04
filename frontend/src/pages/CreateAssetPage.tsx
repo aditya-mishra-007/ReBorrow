@@ -5,6 +5,7 @@ import toast from 'react-hot-toast';
 import * as assetApi from '@/api/assetApi';
 import { getErrorMessage } from '@/lib/api';
 import { CATEGORIES } from '@/constants/categories';
+import ImageUploadInput from '@/components/ImageUploadInput';
 import type { CreateAssetPayload } from '@/types';
 
 /**
@@ -29,6 +30,7 @@ import type { CreateAssetPayload } from '@/types';
 export default function CreateAssetPage() {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [images, setImages] = useState<File[]>([]);
 
   const {
     register,
@@ -39,7 +41,7 @@ export default function CreateAssetPage() {
   const onSubmit = async (data: CreateAssetPayload) => {
     setIsSubmitting(true);
     try {
-      const { data: createdAsset } = await assetApi.createAsset(data);
+      const { data: createdAsset } = await assetApi.createAsset(data, images);
       toast.success('Item listed successfully!');
       navigate(`/assets/${createdAsset._id}`, { replace: true });
     } catch (error) {
@@ -48,7 +50,6 @@ export default function CreateAssetPage() {
       setIsSubmitting(false);
     }
   };
-
   return (
     <div className="mx-auto max-w-lg">
       <Link to="/" className="mb-4 inline-block text-sm font-medium text-brand-600">
@@ -108,7 +109,7 @@ export default function CreateAssetPage() {
             )}
           </div>
 
-          {/* --- Description field --- */}
+{/* --- Description field --- */}
           <div>
             <label htmlFor="description" className="block text-sm font-medium text-gray-700">
               Description
@@ -127,6 +128,16 @@ export default function CreateAssetPage() {
             {errors.description && (
               <p className="mt-1 text-sm text-red-600">{errors.description.message}</p>
             )}
+          </div>
+
+          {/* --- Image upload (optional) --- */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700">
+              Photos <span className="font-normal text-gray-400">(optional)</span>
+            </label>
+            <div className="mt-1">
+              <ImageUploadInput files={images} onChange={setImages} />
+            </div>
           </div>
 
           <button

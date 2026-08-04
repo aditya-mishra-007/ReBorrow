@@ -83,8 +83,36 @@ export async function getAssetById(id: string): Promise<ApiResponse<Asset>> {
  * interceptor) — the backend's `protect` middleware will reject this
  * with 401 if no valid token is present.
  */
-export async function createAsset(payload: CreateAssetPayload): Promise<ApiResponse<Asset>> {
-  const response = await api.post<ApiResponse<Asset>>('/assets', payload);
+/**
+ * createAsset
+ * ------------------------------------------------------------------
+ * Creates a new asset listing, optionally with image files. Sends a
+ * multipart/form-data request rather than JSON when images are
+ * present — required for the backend's Multer middleware to parse
+ * uploaded files. When no images are provided, still uses FormData
+ * for consistency (the backend's Multer middleware runs on this
+ * route regardless, and correctly handles zero-file requests fine).
+ *
+ * Note: this deliberately does NOT set a 'Content-Type' header
+ * manually — axios/the browser automatically sets the correct
+ * 'multipart/form-data; boundary=...' header when the request body is
+ * a FormData instance, and manually overriding it would break the
+ * boundary marker the server needs to parse the parts correctly.
+ */
+export async function createAsset(
+  payload: CreateAssetPayload,
+  images?: File[]
+): Promise<ApiResponse<Asset>> {
+  const formData = new FormData();
+  formData.append('name', payload.name);
+  formData.append('description', payload.description);
+  formData.append('category', payload.category);
+
+  if (images && images.length > 0) {
+    images.forEach((file) => formData.append('images', file));
+  }
+
+  const response = await api.post<ApiResponse<Asset>>('/assets', formData);
   return response.data;
 }
 
@@ -116,5 +144,22 @@ export async function updateAsset(
  */
 export async function deleteAsset(id: string): Promise<ApiResponse<null>> {
   const response = await api.delete<ApiResponse<null>>(`/assets/${id}`);
+  return response.data;
+}
+
+/**
+ * deleteAssetImage
+ * ------------------------------------------------------------------
+ * Removes a single image from an existing asset listing. Backend
+ * deletes the image from Cloudinary storage AND removes it from the
+ * asset's images array, returning the updated asset document.
+ */
+export async function deleteAssetImage(
+  assetId: string,
+  imageUrl: string
+): Promise<ApiResponse<Asset>> {
+  const response = await api.delete<ApiResponse<Asset>>(`/assets/${assetId}/images`, {
+    data: { imageUrl },
+  });
   return response.data;
 }

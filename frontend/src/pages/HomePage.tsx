@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback, FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import { ImageOff } from 'lucide-react';
 import { getCategoryIcon } from '@/constants/categories';
 import * as assetApi from '@/api/assetApi';
 import { getErrorMessage } from '@/lib/api';
@@ -176,6 +177,7 @@ export default function HomePage() {
  */
 function AssetCard({ asset }: { asset: Asset }) {
   const ownerName = isPopulatedOwner(asset.owner) ? asset.owner.name : 'Unknown';
+  const thumbnail = asset.images[0];
 
   const statusStyles: Record<AssetStatus, string> = {
     available: 'bg-green-100 text-green-800',
@@ -186,8 +188,24 @@ function AssetCard({ asset }: { asset: Asset }) {
   return (
     <Link
       to={`/assets/${asset._id}`}
-      className="flex flex-col rounded-lg border border-gray-200 bg-white p-5 shadow-sm transition-shadow hover:shadow-md"
+      className="flex flex-col overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm transition-shadow hover:shadow-md"
     >
+      <div className="aspect-video w-full bg-gray-100">
+        {thumbnail ? (
+          <img
+            src={thumbnail}
+            alt={asset.name}
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center">
+            <ImageOff className="h-8 w-8 text-gray-300" />
+          </div>
+        )}
+      </div>
+
+      <div className="flex flex-1 flex-col p-5">
       <div className="mb-2 flex items-start justify-between gap-2">
         <h2 className="line-clamp-1 text-lg font-semibold text-gray-900">{asset.name}</h2>
         <span
@@ -202,6 +220,7 @@ function AssetCard({ asset }: { asset: Asset }) {
       <div className="flex items-center justify-between text-xs text-gray-400">
         <CategoryBadge category={asset.category} />
         <span>Listed by {ownerName}</span>
+      </div>
       </div>
     </Link>
   );

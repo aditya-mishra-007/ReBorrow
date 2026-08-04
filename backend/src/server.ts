@@ -1,9 +1,12 @@
-import dotenv from 'dotenv';
-
-// Load environment variables FIRST, before importing anything that
-// depends on them (e.g., app.ts references process.env.CLIENT_URL at
-// module-load time for CORS config). Order matters here.
-dotenv.config();
+// Side-effect import that runs dotenv.config() as part of the import
+// itself. Using `import 'dotenv/config'` (rather than importing
+// dotenv and calling .config() separately) guarantees this executes
+// before any other import below it, even under tsx's ESM-style import
+// hoisting — a plain `import dotenv from 'dotenv'; dotenv.config();`
+// split across two statements can get reordered by the hoisting
+// behavior, causing env vars to be undefined in modules (like
+// cloudinary.ts) that read process.env at their own module-load time.
+import 'dotenv/config';
 
 import app from './app';
 import connectDB from './config/db';

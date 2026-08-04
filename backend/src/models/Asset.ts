@@ -23,6 +23,7 @@ export interface IAsset extends Document {
   category: string;
   status: AssetStatus;
   owner: Types.ObjectId;
+  images: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -66,6 +67,16 @@ const AssetSchema: Schema<IAsset> = new Schema(
       type: Schema.Types.ObjectId,
       ref: 'User',
       required: [true, 'Asset must be associated with an owner'],
+    },
+    // Stores full Cloudinary secure_url strings, not raw public_ids —
+    // this keeps read paths simple (frontend renders images.map(url
+    // => <img src={url} />) with zero URL construction logic needed).
+    // Deletion still works fine since Cloudinary's public_id can be
+    // parsed back out of the URL when needed (see deleteAsset in
+    // assetController.ts).
+    images: {
+      type: [String],
+      default: [],
     },
   },
   {

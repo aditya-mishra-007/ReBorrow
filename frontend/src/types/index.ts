@@ -60,6 +60,7 @@ export interface Asset {
   category: string;
   status: AssetStatus;
   owner: User | string;
+  images: string[];
   createdAt: string;
   updatedAt: string;
 }

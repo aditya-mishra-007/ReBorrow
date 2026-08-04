@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { getCategoryIcon } from '@/constants/categories';
+import { ImageOff } from 'lucide-react';
 import * as assetApi from '@/api/assetApi';
 import * as borrowRequestApi from '@/api/borrowRequestApi';
 import { getErrorMessage } from '@/lib/api';
@@ -137,7 +138,10 @@ export default function AssetDetailPage() {
         ← Back to browsing
       </Link>
 
-      <div className="rounded-lg border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
+      <div className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm">
+        <ImageGallery images={asset.images} altText={asset.name} />
+
+        <div className="p-6 sm:p-8">
         {/* --- Header: name + status --- */}
         <div className="mb-4 flex items-start justify-between gap-3">
           <h1 className="text-2xl font-bold text-gray-900">{asset.name}</h1>
@@ -240,6 +244,7 @@ export default function AssetDetailPage() {
             </button>
           </form>
         )}
+        </div>
       </div>
     </div>
   );
@@ -261,5 +266,53 @@ function CategoryBadge({ category }: { category: string }) {
       <Icon className="h-3.5 w-3.5" />
       {category}
     </span>
+  );
+}
+
+
+/**
+ * ImageGallery
+ * ------------------------------------------------------------------
+ * Displays an asset's images: a large main image with a row of
+ * clickable thumbnails below it (if more than one image exists).
+ * Falls back to a placeholder if the asset has no images at all.
+ */
+function ImageGallery({ images, altText }: { images: string[]; altText: string }) {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  if (images.length === 0) {
+    return (
+      <div className="flex aspect-video w-full items-center justify-center bg-gray-100">
+        <ImageOff className="h-12 w-12 text-gray-300" />
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div className="aspect-video w-full bg-gray-100">
+        <img
+          src={images[activeIndex]}
+          alt={altText}
+          className="h-full w-full object-cover"
+        />
+      </div>
+
+      {images.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto p-3">
+          {images.map((url, index) => (
+            <button
+              key={url}
+              onClick={() => setActiveIndex(index)}
+              className={`h-16 w-16 shrink-0 overflow-hidden rounded-md border-2 transition-colors ${
+                index === activeIndex ? 'border-brand-600' : 'border-transparent'
+              }`}
+            >
+              <img src={url} alt={`${altText} thumbnail ${index + 1}`} className="h-full w-full object-cover" />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

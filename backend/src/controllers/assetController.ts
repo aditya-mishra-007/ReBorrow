@@ -3,6 +3,51 @@ import mongoose from 'mongoose';
 import Asset, { IAsset } from '../models/Asset';
 import BorrowRequest from '../models/BorrowRequest';
 import { AuthRequest } from '../middleware/authMiddleware';
+import cloudinary from '../config/cloudinary';
+
+/**
+ * uploadBufferToCloudinary
+ * ------------------------------------------------------------------
+ * Wraps Cloudinary's upload_stream (callback-based) in a Promise so
+ * it can be awaited alongside the rest of this file's async/await
+ * style. Uploads are scoped to a 'reborrow/assets' folder in your
+ * Cloudinary account for organization, and images are auto-optimized
+ * (quality/format) by Cloudinary on delivery via the returned URL's
+ * transformation parameters.
+ */
+function uploadBufferToCloudinary(buffer: Buffer): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const stream = cloudinary.uploader.upload_stream(
+      {
+        folder: 'reborrow/assets',
+        resource_type: 'image',
+        transformation: [{ quality: 'auto', fetch_format: 'auto' }],
+      },
+      (error, result) => {
+        if (error || !result) {
+          reject(error || new Error('Cloudinary upload failed with no error detail'));
+          return;
+        }
+        resolve(result.secure_url);
+      }
+    );
+    stream.end(buffer);
+  });
+}
+
+/**
+ * getCloudinaryPublicId
+ * ------------------------------------------------------------------
+ * Extracts the public_id Cloudinary needs for deletion from a stored
+ * secure_url. Cloudinary URLs look like:
+ *   https://res.cloudinary.com/<cloud>/image/upload/v169.../reborrow/assets/abc123.jpg
+ * The public_id is everything after the version segment (v169...),
+ * minus the file extension: 'reborrow/assets/abc123'
+ */
+function getCloudinaryPublicId(url: string): string | null {
+  const match = url.match(/\/upload\/(?:v\d+\/)?(.+)\.\w+$/);
+  return match?.[1] || null;
+}
 
 /**
  * @desc    Create a new asset listing
@@ -14,6 +59,7 @@ import { AuthRequest } from '../middleware/authMiddleware';
  * body, preventing a malicious client from creating assets on another
  * user's behalf.
  */
+
 export const createAsset = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     if (!req.user) {
@@ -31,11 +77,31 @@ export const createAsset = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
+    // req.files is populated by the uploadAssetImages multer middleware
+    // (see uploadMiddleware.ts). Images are optional — a listing can be
+    // created with zero images, matching the pre-existing behavior.
+    const files = (req.files as Express.Multer.File[] | undefined) || [];
+
+    let imageUrls: string[] = [];
+    if (files.length > 0) {
+      try {
+        imageUrls = await Promise.all(files.map((file) => uploadBufferToCloudinary(file.buffer)));
+      } catch (uploadError) {
+        console.error('Cloudinary upload error:', uploadError);
+        res.status(502).json({
+          success: false,
+          message: 'Failed to upload one or more images. Please try again.',
+        });
+        return;
+      }
+    }
+
     const asset: IAsset = await Asset.create({
       name: String(name).trim(),
       description: String(description).trim(),
       category: String(category).trim(),
       owner: req.user._id,
+      images: imageUrls,
       // status intentionally omitted -> defaults to 'available'
     });
 
@@ -297,5 +363,86 @@ export const deleteAsset = async (req: AuthRequest, res: Response): Promise<void
     res.status(500).json({ success: false, message: 'Server error while deleting asset' });
   }
 };
+
+
+/**
+ * @desc    Delete a single image from an asset (owner-only)
+ * @route   DELETE /api/assets/:id/images
+ * @access  Private
+ *
+ * Expects `{ imageUrl: string }` in the request body — the exact URL
+ * to remove, as returned in the asset's `images` array. Removes it
+ * both from Cloudinary storage (freeing your account's quota) and
+ * from the Asset document's images array.
+ */
+export const deleteAssetImage = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, message: 'Not authorized' });
+      return;
+    }
+
+    const { id } = req.params;
+    const { imageUrl } = req.body;
+
+    if (typeof id !== 'string' || !mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ success: false, message: 'Invalid asset ID' });
+      return;
+    }
+
+    if (!imageUrl || typeof imageUrl !== 'string') {
+      res.status(400).json({ success: false, message: 'imageUrl is required' });
+      return;
+    }
+
+    const asset = await Asset.findById(id);
+
+    if (!asset) {
+      res.status(404).json({ success: false, message: 'Asset not found' });
+      return;
+    }
+
+    if (asset.owner.toString() !== req.user._id.toString()) {
+      res.status(403).json({
+        success: false,
+        message: 'Not authorized to modify this asset',
+      });
+      return;
+    }
+
+    if (!asset.images.includes(imageUrl)) {
+      res.status(404).json({ success: false, message: 'Image not found on this asset' });
+      return;
+    }
+
+    // Attempt Cloudinary deletion, but don't let a Cloudinary-side
+    // failure block removing the (possibly already-broken) reference
+    // from our own database — an orphaned Cloudinary asset costs
+    // nothing critical, whereas a stuck broken-image reference in the
+    // UI is the worse user-facing outcome.
+    const publicId = getCloudinaryPublicId(imageUrl);
+    if (publicId) {
+      try {
+        await cloudinary.uploader.destroy(publicId);
+      } catch (cloudinaryError) {
+        console.error('Cloudinary deletion warning (non-fatal):', cloudinaryError);
+      }
+    }
+
+    asset.images = asset.images.filter((url) => url !== imageUrl);
+    await asset.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Image removed successfully',
+      data: asset,
+    });
+  } catch (error) {
+    console.error('Delete asset image error:', error);
+    res.status(500).json({ success: false, message: 'Server error while removing image' });
+  }
+};
+
+
 
 

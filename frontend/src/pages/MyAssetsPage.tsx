@@ -1,3 +1,4 @@
+import { ImageOff, X } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -103,7 +104,17 @@ export default function MyAssetsPage() {
               key={asset._id}
               className="flex flex-col gap-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between"
             >
-              <div className="min-w-0 flex-1">
+              <div className="flex min-w-0 flex-1 items-center gap-4">
+                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-gray-100">
+                  {asset.images[0] ? (
+                    <img src={asset.images[0]} alt={asset.name} className="h-full w-full object-cover" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center">
+                      <ImageOff className="h-5 w-5 text-gray-300" />
+                    </div>
+                  )}
+                </div>
+                <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <Link
                     to={`/assets/${asset._id}`}
@@ -118,6 +129,7 @@ export default function MyAssetsPage() {
                   </span>
                 </div>
                 <p className="mt-1 line-clamp-1 text-sm text-gray-500">{asset.description}</p>
+                </div>
               </div>
 
               <div className="flex shrink-0 gap-2">
@@ -177,18 +189,35 @@ function EditAssetForm({
   const [name, setName] = useState(asset.name);
   const [category, setCategory] = useState(asset.category);
   const [description, setDescription] = useState(asset.description);
+  const [images, setImages] = useState(asset.images);
   const [isSaving, setIsSaving] = useState(false);
+  const [removingImage, setRemovingImage] = useState<string | null>(null);
 
   const handleSave = async () => {
     setIsSaving(true);
     try {
       const { data } = await assetApi.updateAsset(asset._id, { name, category, description });
       toast.success('Listing updated');
-      onSaved(data);
+      onSaved({ ...data, images });
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleRemoveImage = async (imageUrl: string) => {
+    if (!window.confirm('Remove this image?')) return;
+
+    setRemovingImage(imageUrl);
+    try {
+      const { data } = await assetApi.deleteAssetImage(asset._id, imageUrl);
+      toast.success('Image removed');
+      setImages(data.images);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setRemovingImage(null);
     }
   };
 
@@ -220,6 +249,29 @@ function EditAssetForm({
             className="mt-1 w-full resize-none rounded-md border border-gray-300 px-3 py-1.5 text-sm"
           />
         </div>
+
+        {images.length > 0 && (
+          <div>
+            <label className="block text-xs font-medium text-gray-600">Photos</label>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {images.map((url) => (
+                <div key={url} className="group relative h-16 w-16 overflow-hidden rounded-md border border-gray-200">
+                  <img src={url} alt="" className="h-full w-full object-cover" />
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveImage(url)}
+                    disabled={removingImage === url}
+                    className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-100"
+                    aria-label="Remove image"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="flex gap-2">
           <button
             onClick={handleSave}
