@@ -11,9 +11,10 @@ import { isPopulatedAsset, type BorrowRequest, type BorrowRequestStatus } from '
  * Private route: /my-requests (guarded by ProtectedRoute)
  *
  * Lists all borrow requests the current user has made (as requester)
- * on OTHER users' assets. Purely a read-only status-tracking view —
- * no actions are available here (approve/reject belong exclusively
- * to the asset owner, on IncomingRequestsPage).
+ * on OTHER users' assets. Read-only status tracking, EXCEPT for a
+ * 'pending' request, which can be cancelled by the requester —
+ * approve/reject remain exclusively the asset owner's actions, on
+ * IncomingRequestsPage.
  */
 
 const statusStyles: Record<BorrowRequestStatus, string> = {
@@ -33,6 +34,7 @@ function formatDate(dateStr: string): string {
 export default function MyRequestsPage() {
   const [requests, setRequests] = useState<BorrowRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
   const fetchRequests = useCallback(async () => {
     setIsLoading(true);
@@ -49,6 +51,25 @@ export default function MyRequestsPage() {
   useEffect(() => {
     fetchRequests();
   }, [fetchRequests]);
+
+  const handleCancel = async (requestId: string) => {
+    if (!window.confirm('Cancel this borrow request?')) {
+      return;
+    }
+
+    setCancellingId(requestId);
+    try {
+      await borrowRequestApi.cancelBorrowRequest(requestId);
+      toast.success('Request cancelled');
+      // The request is deleted server-side, so remove it from local
+      // state entirely rather than trying to update its status.
+      setRequests((prev) => prev.filter((r) => r._id !== requestId));
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   return (
     <div>
@@ -76,6 +97,7 @@ export default function MyRequestsPage() {
         <div className="space-y-4">
           {requests.map((request) => {
             const asset = isPopulatedAsset(request.asset) ? request.asset : null;
+            const isCancelling = cancellingId === request._id;
 
             return (
               <div
@@ -107,8 +129,20 @@ export default function MyRequestsPage() {
                   </p>
                 </div>
 
-                <div className="shrink-0 text-xs text-gray-400">
-                  Requested {formatDate(request.createdAt)}
+                <div className="flex shrink-0 items-center gap-3">
+                  <span className="text-xs text-gray-400">
+                    Requested {formatDate(request.createdAt)}
+                  </span>
+
+                  {request.status === 'pending' && (
+                    <button
+                      onClick={() => handleCancel(request._id)}
+                      disabled={isCancelling}
+                      className="rounded-md bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {isCancelling ? 'Cancelling...' : 'Cancel'}
+                    </button>
+                  )}
                 </div>
               </div>
             );

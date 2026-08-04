@@ -86,3 +86,22 @@ export async function rejectBorrowRequest(id: string): Promise<ApiResponse<Borro
   const response = await api.patch<ApiResponse<BorrowRequest>>(`/borrow-requests/${id}/reject`);
   return response.data;
 }
+
+
+/**
+ * cancelBorrowRequest
+ * ------------------------------------------------------------------
+ * Cancels a pending borrow request the current user originally made.
+ * Backend enforces: only the original requester can cancel (403
+ * NOT_REQUESTER otherwise), and only 'pending' requests are
+ * cancellable (409 REQUEST_NOT_PENDING otherwise). The underlying
+ * asset's status cascades back to 'available'.
+ *
+ * Returns ApiResponse<null> since the backend deletes the request
+ * document entirely on cancellation rather than returning an updated
+ * record — there's nothing left to hand back except a success message.
+ */
+export async function cancelBorrowRequest(id: string): Promise<ApiResponse<null>> {
+  const response = await api.patch<ApiResponse<null>>(`/borrow-requests/${id}/cancel`);
+  return response.data;
+}

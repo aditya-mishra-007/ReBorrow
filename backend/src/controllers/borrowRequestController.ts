@@ -384,3 +384,104 @@ export const rejectBorrowRequest = async (req: AuthRequest, res: Response): Prom
     await session.endSession();
   }
 };
+
+
+/**
+ * @desc    Cancel a pending borrow request (requester only)
+ * @route   PATCH /api/borrow-requests/:id/cancel
+ * @access  Private
+ *
+ * Business rules enforced here:
+ * 1. Only the original requester may cancel their own request.
+ * 2. Only a 'pending' request may be cancelled — once approved or
+ *    rejected, the request is a closed record, not cancellable.
+ * 3. Cascade: asset status safely resets 'requested' -> 'available',
+ *    identical to the reject flow, since a cancellation has the same
+ *    downstream effect on the asset as an owner's rejection.
+ *
+ * Wrapped in a transaction for the same atomicity guarantee as
+ * create/approve/reject.
+ */
+export const cancelBorrowRequest = async (req: AuthRequest, res: Response): Promise<void> => {
+  const session = await mongoose.startSession();
+
+  try {
+    if (!req.user) {
+      res.status(401).json({ success: false, message: 'Not authorized' });
+      return;
+    }
+
+    const { id } = req.params;
+
+    if (typeof id !== 'string' || !mongoose.Types.ObjectId.isValid(id)) {
+      res.status(400).json({ success: false, message: 'Invalid borrow request ID' });
+      return;
+    }
+
+    await session.withTransaction(async () => {
+      const borrowRequest = await BorrowRequest.findById(id).session(session);
+
+      if (!borrowRequest) {
+        throw new Error('REQUEST_NOT_FOUND');
+      }
+
+      if (borrowRequest.requester.toString() !== req.user!._id.toString()) {
+        throw new Error('NOT_REQUESTER');
+      }
+
+      if (borrowRequest.status !== 'pending') {
+        throw new Error('REQUEST_NOT_PENDING');
+      }
+
+      const asset = await Asset.findById(borrowRequest.asset).session(session);
+
+      if (!asset) {
+        throw new Error('ASSET_NOT_FOUND');
+      }
+
+      // Deleting the request entirely (rather than marking it
+      // 'cancelled') keeps the BorrowRequestStatus enum unchanged and
+      // matches the mental model of "withdrawing" a request that was
+      // never acted upon — there's no meaningful record to keep, unlike
+      // an approved/rejected request which represents a real decision.
+      await borrowRequest.deleteOne({ session });
+
+      // Cascade: safely reset requested -> available
+      asset.status = 'available';
+      await asset.save({ session });
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Borrow request cancelled successfully',
+    });
+  } catch (error) {
+    if (error instanceof Error) {
+      switch (error.message) {
+        case 'REQUEST_NOT_FOUND':
+          res.status(404).json({ success: false, message: 'Borrow request not found' });
+          return;
+        case 'ASSET_NOT_FOUND':
+          res.status(404).json({ success: false, message: 'Associated asset not found' });
+          return;
+        case 'NOT_REQUESTER':
+          res.status(403).json({
+            success: false,
+            message: 'Only the original requester can cancel this request',
+          });
+          return;
+        case 'REQUEST_NOT_PENDING':
+          res.status(409).json({
+            success: false,
+            message: 'Only pending requests can be cancelled',
+          });
+          return;
+      }
+    }
+
+    console.error('Cancel borrow request error:', error);
+    res.status(500).json({ success: false, message: 'Server error while cancelling request' });
+  } finally {
+    await session.endSession();
+  }
+};
