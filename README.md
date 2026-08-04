@@ -6,6 +6,14 @@ Built with the **MERN Stack (MongoDB, Express, React, Node.js)** using **TypeScr
 
 ---
 
+## 🌐 Live Demo
+
+🔗 **Live Application:** https://reborrow.vercel.app/
+
+🔗 **Backend API Health Check:** https://reborrow.onrender.com/api/health
+
+---
+
 ## 🛠️ Tech Stack
 
 ### Backend
@@ -16,6 +24,8 @@ Built with the **MERN Stack (MongoDB, Express, React, Node.js)** using **TypeScr
 - Mongoose
 - JWT
 - bcrypt
+
+...
 
 ### Frontend
 - React
