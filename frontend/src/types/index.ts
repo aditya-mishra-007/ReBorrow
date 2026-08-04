@@ -177,3 +177,30 @@ export interface CreateBorrowRequestPayload {
   startDate: string;
   endDate: string;
 }
+
+
+/**
+ * PaginationMeta
+ * ------------------------------------------------------------------
+ * Shape of the `pagination` object returned by paginated list
+ * endpoints (currently just GET /api/assets). Mirrors the metadata
+ * assetController.ts's getAssets computes and returns alongside `data`.
+ */
+export interface PaginationMeta {
+  currentPage: number;
+  totalPages: number;
+  totalCount: number;
+  limit: number;
+}
+
+/**
+ * PaginatedApiResponse<T>
+ * ------------------------------------------------------------------
+ * Extends ApiResponse<T> with pagination metadata. Used specifically
+ * for endpoints that paginate their results — distinct from the plain
+ * ApiResponse<T> used by non-paginated list endpoints (e.g.,
+ * getMyBorrowRequests, getIncomingBorrowRequests).
+ */
+export interface PaginatedApiResponse<T> extends ApiResponse<T> {
+  pagination: PaginationMeta;
+}

@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import * as assetApi from '@/api/assetApi';
 import { getErrorMessage } from '@/lib/api';
-import { isPopulatedOwner, type Asset, type AssetStatus } from '@/types';
+import { isPopulatedOwner, type Asset, type AssetStatus, type PaginationMeta } from '@/types';
+import Pagination from '@/components/Pagination';
 
 /**
  * HomePage.tsx
@@ -14,6 +15,7 @@ import { isPopulatedOwner, type Asset, type AssetStatus } from '@/types';
  *   - Free-text search (name/description/category, via backend's
  *     $text index)
  *   - Status filtering (available / requested / borrowed / all)
+ *   - Pagination (12 items per page)
  *
  * No authentication required to view — matches the "public browsing,
  * auth wall on actions" access model established in App.tsx.
@@ -26,27 +28,34 @@ const STATUS_FILTERS: { label: string; value: AssetStatus | 'all' }[] = [
   { label: 'Borrowed', value: 'borrowed' },
 ];
 
+const PAGE_SIZE = 12;
+
 export default function HomePage() {
   const [assets, setAssets] = useState<Asset[]>([]);
+  const [pagination, setPagination] = useState<PaginationMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [searchInput, setSearchInput] = useState('');
   const [activeSearch, setActiveSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<AssetStatus | 'all'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
 
   const fetchAssets = useCallback(async () => {
     setIsLoading(true);
     try {
-      const { data } = await assetApi.getAssets({
+      const { data, pagination: paginationMeta } = await assetApi.getAssets({
         search: activeSearch || undefined,
         status: statusFilter === 'all' ? undefined : statusFilter,
+        page: currentPage,
+        limit: PAGE_SIZE,
       });
       setAssets(data);
+      setPagination(paginationMeta);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
       setIsLoading(false);
     }
-  }, [activeSearch, statusFilter]);
+  }, [activeSearch, statusFilter, currentPage]);
 
   useEffect(() => {
     fetchAssets();
@@ -54,7 +63,21 @@ export default function HomePage() {
 
   const handleSearchSubmit = (e: FormEvent) => {
     e.preventDefault();
+    setCurrentPage(1); // reset to page 1 whenever a new search is submitted
     setActiveSearch(searchInput.trim());
+  };
+
+  const handleStatusFilterChange = (value: AssetStatus | 'all') => {
+    setCurrentPage(1); // reset to page 1 whenever the filter changes
+    setStatusFilter(value);
+  };
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    // Scroll to top so the user sees the new page's results from the
+    // start, rather than staying scrolled wherever they were on the
+    // previous page (which could land mid-grid on a shorter last page).
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   return (
@@ -89,7 +112,7 @@ export default function HomePage() {
           {STATUS_FILTERS.map((filter) => (
             <button
               key={filter.value}
-              onClick={() => setStatusFilter(filter.value)}
+              onClick={() => handleStatusFilterChange(filter.value)}
               className={`rounded-full px-3 py-1.5 text-sm font-medium transition-colors ${
                 statusFilter === filter.value
                   ? 'bg-brand-600 text-white'
@@ -101,6 +124,15 @@ export default function HomePage() {
           ))}
         </div>
       </div>
+
+      {/* --- Result count --- */}
+      {!isLoading && pagination && pagination.totalCount > 0 && (
+        <p className="mb-4 text-sm text-gray-500">
+          Showing {(pagination.currentPage - 1) * pagination.limit + 1}–
+          {Math.min(pagination.currentPage * pagination.limit, pagination.totalCount)} of{' '}
+          {pagination.totalCount} items
+        </p>
+      )}
 
       {/* --- Asset grid / states --- */}
       {isLoading ? (
@@ -116,11 +148,21 @@ export default function HomePage() {
           <p className="text-gray-500">No items found. Try adjusting your search or filters.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {assets.map((asset) => (
-            <AssetCard key={asset._id} asset={asset} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+            {assets.map((asset) => (
+              <AssetCard key={asset._id} asset={asset} />
+            ))}
+          </div>
+
+          {pagination && (
+            <Pagination
+              currentPage={pagination.currentPage}
+              totalPages={pagination.totalPages}
+              onPageChange={handlePageChange}
+            />
+          )}
+        </>
       )}
     </div>
   );
@@ -130,10 +172,6 @@ export default function HomePage() {
  * AssetCard
  * ------------------------------------------------------------------
  * Local presentational component for a single asset in the grid.
- * Kept in this file rather than extracted separately since it's
- * currently only used here — if a second page needs an identical
- * card (e.g., MyAssetsPage), I'll extract it to its own file at that
- * point rather than pre-emptively abstracting now.
  */
 function AssetCard({ asset }: { asset: Asset }) {
   const ownerName = isPopulatedOwner(asset.owner) ? asset.owner.name : 'Unknown';

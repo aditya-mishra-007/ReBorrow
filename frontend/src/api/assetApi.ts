@@ -4,6 +4,7 @@ import type {
   Asset,
   AssetStatus,
   CreateAssetPayload,
+  PaginatedApiResponse,
   UpdateAssetPayload,
 } from '@/types';
 
@@ -42,6 +43,8 @@ export interface GetAssetsParams {
   category?: string;
   search?: string;
   owner?: 'me' | string;
+  page?: number;
+  limit?: number;
 }
 
 /**
@@ -54,8 +57,10 @@ export interface GetAssetsParams {
  * GET /, except when owner=me is used without a token, which the
  * backend rejects with 401).
  */
-export async function getAssets(params?: GetAssetsParams): Promise<ApiResponse<Asset[]>> {
-  const response = await api.get<ApiResponse<Asset[]>>('/assets', { params });
+export async function getAssets(
+  params?: GetAssetsParams
+): Promise<PaginatedApiResponse<Asset[]>> {
+  const response = await api.get<PaginatedApiResponse<Asset[]>>('/assets', { params });
   return response.data;
 }
 

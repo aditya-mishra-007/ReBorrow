@@ -55,7 +55,7 @@ export const createAsset = async (req: AuthRequest, res: Response): Promise<void
 };
 
 /**
- * @desc    Get all assets (with optional filtering/search)
+ * @desc    Get all assets (with optional filtering/search/pagination)
  * @route   GET /api/assets
  * @access  Public
  *
@@ -63,18 +63,16 @@ export const createAsset = async (req: AuthRequest, res: Response): Promise<void
  *   - status: filter by asset status ('available' | 'requested' | 'borrowed')
  *   - category: filter by category (case-insensitive exact match)
  *   - search: full-text search across name/description/category
- *   - owner: filter by ownership. Accepts either:
- *       - 'me' -> resolves to the authenticated user's own assets
- *         (requires a valid JWT; returns 401 if used while logged out)
- *       - a raw ObjectId string -> filter by that exact owner
+ *   - owner: filter by ownership ('me' or a raw ObjectId string)
+ *   - page: 1-indexed page number (default: 1)
+ *   - limit: results per page (default: 12, max: 50 to prevent abuse)
  *
- * Always populates `owner` with safe, non-sensitive fields only
- * (name + email) — never the password, even though it's excluded
- * by default at the schema level, this is defense-in-depth.
+ * Response includes pagination metadata alongside `data` so the
+ * frontend can render page controls without a separate count request.
  */
 export const getAssets = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { status, category, search, owner } = req.query;
+    const { status, category, search, owner, page, limit } = req.query;
 
     const filter: Record<string, unknown> = {};
 
@@ -91,9 +89,6 @@ export const getAssets = async (req: AuthRequest, res: Response): Promise<void> 
     }
 
     if (owner === 'me') {
-      // 'owner=me' requires authentication — protect middleware isn't
-      // applied to this public route, so we check req.user manually
-      // here rather than gating the entire route behind auth.
       if (!req.user) {
         res.status(401).json({
           success: false,
@@ -106,14 +101,38 @@ export const getAssets = async (req: AuthRequest, res: Response): Promise<void> 
       filter.owner = owner;
     }
 
-    const assets = await Asset.find(filter)
-      .populate('owner', 'name email')
-      .sort({ createdAt: -1 });
+    // --- Pagination parsing ---
+    // Parsed defensively: non-numeric or missing values fall back to
+    // sane defaults rather than producing NaN, which would break the
+    // Mongoose .skip()/.limit() calls below.
+    const parsedPage = Math.max(1, parseInt(String(page), 10) || 1);
+    const parsedLimit = Math.min(50, Math.max(1, parseInt(String(limit), 10) || 12));
+    const skip = (parsedPage - 1) * parsedLimit;
+
+    // Run the count and the paginated fetch concurrently — they're
+    // independent reads against the same filter, so there's no reason
+    // to wait for one before starting the other.
+    const [totalCount, assets] = await Promise.all([
+      Asset.countDocuments(filter),
+      Asset.find(filter)
+        .populate('owner', 'name email')
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(parsedLimit),
+    ]);
+
+    const totalPages = Math.max(1, Math.ceil(totalCount / parsedLimit));
 
     res.status(200).json({
       success: true,
       count: assets.length,
       data: assets,
+      pagination: {
+        currentPage: parsedPage,
+        totalPages,
+        totalCount,
+        limit: parsedLimit,
+      },
     });
   } catch (error) {
     console.error('Get assets error:', error);
@@ -278,3 +297,5 @@ export const deleteAsset = async (req: AuthRequest, res: Response): Promise<void
     res.status(500).json({ success: false, message: 'Server error while deleting asset' });
   }
 };
+
+
