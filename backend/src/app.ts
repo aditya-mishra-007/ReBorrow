@@ -6,6 +6,7 @@ import morgan from 'morgan';
 import authRoutes from './routes/authRoutes';
 import assetRoutes from './routes/assetRoutes';
 import borrowRequestRoutes from './routes/borrowRequestRoutes';
+import adminRoutes from './routes/adminRoutes';
 
 /**
  * app.ts
@@ -84,6 +85,7 @@ app.get('/api/health', (_req: Request, res: Response) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/borrow-requests', borrowRequestRoutes);
+app.use('/api/admin', adminRoutes);
 
 // ------------------------------------------------------------------
 // 404 handler

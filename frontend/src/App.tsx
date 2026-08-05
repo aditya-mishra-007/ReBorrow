@@ -13,6 +13,8 @@ import MyAssetsPage from '@/pages/MyAssetsPage';
 import MyRequestsPage from '@/pages/MyRequestsPage';
 import IncomingRequestsPage from '@/pages/IncomingRequestsPage';
 import NotFoundPage from '@/pages/NotFoundPage';
+import AdminRoute from '@/components/AdminRoute';
+import AdminDashboardPage from '@/pages/AdminDashboardPage';
 
 /**
  * App.tsx
@@ -56,6 +58,11 @@ function App() {
             <Route path="/my-assets" element={<MyAssetsPage />} />
             <Route path="/my-requests" element={<MyRequestsPage />} />
             <Route path="/incoming-requests" element={<IncomingRequestsPage />} />
+
+            {/* --- Admin-only routes (require authentication AND admin role) --- */}
+            <Route element={<AdminRoute />}>
+              <Route path="/admin" element={<AdminDashboardPage />} />
+            </Route>
           </Route>
 
           {/* --- Catch-all 404 --- */}

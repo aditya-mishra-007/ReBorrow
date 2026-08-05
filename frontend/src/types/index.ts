@@ -205,3 +205,22 @@ export interface PaginationMeta {
 export interface PaginatedApiResponse<T> extends ApiResponse<T> {
   pagination: PaginationMeta;
 }
+
+
+/**
+ * AdminStats
+ * ------------------------------------------------------------------
+ * Shape of the platform summary returned by GET /api/admin/stats.
+ */
+export interface AdminStats {
+  totalUsers: number;
+  totalAssets: number;
+  totalBorrowRequests: number;
+  pendingRequests: number;
+  approvedRequests: number;
+  assetsByStatus: {
+    available: number;
+    requested: number;
+    borrowed: number;
+  };
+}

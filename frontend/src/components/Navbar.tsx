@@ -77,6 +77,15 @@ export default function Navbar() {
                 Incoming
               </Link>
 
+              {user?.role === 'admin' && (
+                <Link
+                  to="/admin"
+                  className="text-sm font-medium text-purple-600 hover:text-purple-700"
+                >
+                  Admin
+                </Link>
+              )}
+
               <div className="ml-2 flex items-center gap-3 border-l border-gray-200 pl-6">
                 <span className="text-sm text-gray-500">
                   Hi, <span className="font-medium text-gray-800">{user?.name}</span>
@@ -164,6 +173,16 @@ export default function Navbar() {
                 >
                   Incoming Requests
                 </Link>
+
+                {user?.role === 'admin' && (
+                  <Link
+                    to="/admin"
+                    className="text-sm font-medium text-purple-600"
+                    onClick={closeMobileMenu}
+                  >
+                    Admin Dashboard
+                  </Link>
+                )}
 
                 <div className="flex items-center justify-between border-t border-gray-200 pt-4">
                   <span className="text-sm text-gray-500">
