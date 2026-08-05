@@ -360,7 +360,8 @@ function AssetsTable() {
           <tbody className="divide-y divide-gray-100">
             {assets.map((asset) => {
               const Icon = getCategoryIcon(asset.category);
-              const ownerName = typeof asset.owner === 'object' ? asset.owner.name : 'Unknown';
+              const ownerName =
+                    asset.owner && typeof asset.owner === 'object' ? asset.owner.name : 'Unknown';
 
               return (
                 <tr key={asset._id}>
