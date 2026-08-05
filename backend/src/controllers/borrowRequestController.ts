@@ -3,6 +3,21 @@ import mongoose from 'mongoose';
 import BorrowRequest, { IBorrowRequest } from '../models/BorrowRequest';
 import Asset from '../models/Asset';
 import { AuthRequest } from '../middleware/authMiddleware';
+import {
+  sendBorrowRequestCreatedEmail,
+  sendBorrowRequestApprovedEmail,
+  sendBorrowRequestRejectedEmail,
+} from '../services/emailService';
+
+/**
+ * formatDateForEmail
+ * ------------------------------------------------------------------
+ * Renders a Date as a short, human-readable string for use in email
+ * templates (e.g., "Aug 10, 2026") rather than a raw ISO timestamp.
+ */
+function formatDateForEmail(date: Date): string {
+  return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+}
 
 /**
  * @desc    Create a new borrow request for an asset
@@ -109,6 +124,31 @@ export const createBorrowRequest = async (req: AuthRequest, res: Response): Prom
       message: 'Borrow request created successfully',
       data: populatedRequest,
     });
+
+    // --- Fire-and-forget email notification to the asset owner ---
+    // Deliberately sent AFTER the response is already returned to the
+    // client, and wrapped in its own try-catch: email delivery is a
+    // notification nicety, never a blocker for the actual borrow
+    // request transaction, which has already fully succeeded by this
+    // point regardless of what happens below.
+    try {
+      const assetDoc = await Asset.findById(assetId).populate<{
+        owner: { name: string; email: string };
+      }>('owner', 'name email');
+
+      if (assetDoc && typeof assetDoc.owner === 'object') {
+        await sendBorrowRequestCreatedEmail({
+          to: assetDoc.owner.email,
+          recipientName: assetDoc.owner.name,
+          requesterName: req.user!.name,
+          assetName: assetDoc.name,
+          startDate: formatDateForEmail(parsedStart),
+          endDate: formatDateForEmail(parsedEnd),
+        });
+      }
+    } catch (emailError) {
+      console.error('Failed to send borrow request created email (non-fatal):', emailError);
+    }
   } catch (error) {
     if (error instanceof Error) {
       switch (error.message) {
@@ -259,6 +299,28 @@ export const approveBorrowRequest = async (req: AuthRequest, res: Response): Pro
       message: 'Borrow request approved successfully',
       data: updatedRequest,
     });
+
+    // --- Fire-and-forget email notification to the requester ---
+    try {
+      if (
+        updatedRequest &&
+        typeof updatedRequest.asset === 'object' &&
+        typeof updatedRequest.requester === 'object'
+      ) {
+        const assetDoc = updatedRequest.asset as unknown as { name: string };
+        const requesterDoc = updatedRequest.requester as unknown as { name: string; email: string };
+
+        await sendBorrowRequestApprovedEmail({
+          to: requesterDoc.email,
+          recipientName: requesterDoc.name,
+          assetName: assetDoc.name,
+          startDate: formatDateForEmail(updatedRequest.startDate),
+          endDate: formatDateForEmail(updatedRequest.endDate),
+        });
+      }
+    } catch (emailError) {
+      console.error('Failed to send approval email (non-fatal):', emailError);
+    }
   } catch (error) {
     if (error instanceof Error) {
       switch (error.message) {
@@ -354,6 +416,28 @@ export const rejectBorrowRequest = async (req: AuthRequest, res: Response): Prom
       message: 'Borrow request rejected successfully',
       data: updatedRequest,
     });
+
+    // --- Fire-and-forget email notification to the requester ---
+    try {
+      if (
+        updatedRequest &&
+        typeof updatedRequest.asset === 'object' &&
+        typeof updatedRequest.requester === 'object'
+      ) {
+        const assetDoc = updatedRequest.asset as unknown as { name: string };
+        const requesterDoc = updatedRequest.requester as unknown as { name: string; email: string };
+
+        await sendBorrowRequestRejectedEmail({
+          to: requesterDoc.email,
+          recipientName: requesterDoc.name,
+          assetName: assetDoc.name,
+          startDate: formatDateForEmail(updatedRequest.startDate),
+          endDate: formatDateForEmail(updatedRequest.endDate),
+        });
+      }
+    } catch (emailError) {
+      console.error('Failed to send rejection email (non-fatal):', emailError);
+    }
   } catch (error) {
     if (error instanceof Error) {
       switch (error.message) {
