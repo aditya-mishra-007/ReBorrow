@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { getCategoryIcon } from '@/constants/categories';
@@ -9,6 +9,8 @@ import * as borrowRequestApi from '@/api/borrowRequestApi';
 import { getErrorMessage } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import { isPopulatedOwner, type Asset, type AssetStatus } from '@/types';
+import * as messageApi from '@/api/messageApi';
+import { MessageCircle } from 'lucide-react';
 
 /**
  * AssetDetailPage.tsx
@@ -41,6 +43,7 @@ const statusStyles: Record<AssetStatus, string> = {
 
 export default function AssetDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { user, isAuthenticated } = useAuth();
 
   const [asset, setAsset] = useState<Asset | null>(null);
@@ -79,6 +82,22 @@ export default function AssetDetailPage() {
 
   const isOwner =
     asset && user && isPopulatedOwner(asset.owner) && asset.owner._id === user._id;
+
+  const [isStartingChat, setIsStartingChat] = useState(false);
+
+  const handleMessageOwner = async () => {
+    if (!asset || !isPopulatedOwner(asset.owner)) return;
+
+    setIsStartingChat(true);
+    try {
+      const { data } = await messageApi.startConversation(asset.owner._id, asset._id);
+      navigate(`/messages?conversation=${data._id}`);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsStartingChat(false);
+    }
+  };
 
   const onSubmitBorrowRequest = async (formValues: BorrowFormValues) => {
     if (!asset) return;
@@ -188,6 +207,16 @@ export default function AssetDetailPage() {
             This item is not currently available for borrowing.
           </div>
         ) : (
+          <div className="space-y-4">
+            <button
+              onClick={handleMessageOwner}
+              disabled={isStartingChat}
+              className="flex w-full items-center justify-center gap-2 rounded-md border border-gray-300 px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-60"
+            >
+              <MessageCircle className="h-4 w-4" />
+              {isStartingChat ? 'Starting chat...' : 'Message Owner'}
+            </button>
+
           <form
             onSubmit={handleSubmit(onSubmitBorrowRequest)}
             className="space-y-4 rounded-md border border-gray-200 p-4"
@@ -243,6 +272,7 @@ export default function AssetDetailPage() {
               {isSubmittingRequest ? 'Sending request...' : 'Send Borrow Request'}
             </button>
           </form>
+          </div>
         )}
         </div>
       </div>

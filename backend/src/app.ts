@@ -7,6 +7,7 @@ import authRoutes from './routes/authRoutes';
 import assetRoutes from './routes/assetRoutes';
 import borrowRequestRoutes from './routes/borrowRequestRoutes';
 import adminRoutes from './routes/adminRoutes';
+import messageRoutes from './routes/messageRoutes';
 
 /**
  * app.ts
@@ -86,6 +87,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/assets', assetRoutes);
 app.use('/api/borrow-requests', borrowRequestRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/messages', messageRoutes);
 
 // ------------------------------------------------------------------
 // 404 handler

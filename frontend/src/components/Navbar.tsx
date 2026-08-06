@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { useSocket } from '@/context/SocketContext';
+import * as messageApi from '@/api/messageApi';
 
 /**
  * Navbar.tsx
@@ -17,8 +19,50 @@ import { useAuth } from '@/context/AuthContext';
  */
 export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuth();
+  const { socket } = useSocket();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  /**
+   * Unread message badge
+   * ------------------------------------------------------------------
+   * Fetches the total unread count once on login, then increments
+   * live whenever a 'new_message' socket event arrives — rather than
+   * re-fetching the full conversation list on every message (which
+   * MessagesPage does for its own more detailed needs), this just
+   * bumps a simple counter for the nav badge, which is cheap and
+   * avoids an unnecessary REST call on every single incoming message.
+   */
+  useEffect(() => {
+    if (!isAuthenticated) {
+      setUnreadCount(0);
+      return;
+    }
+
+    (async () => {
+      try {
+        const { data } = await messageApi.getMyConversations();
+        const total = data.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
+        setUnreadCount(total);
+      } catch {
+        // Non-critical — badge just won't show an initial count.
+      }
+    })();
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewMessage = () => {
+      setUnreadCount((prev) => prev + 1);
+    };
+
+    socket.on('new_message', handleNewMessage);
+    return () => {
+      socket.off('new_message', handleNewMessage);
+    };
+  }, [socket]);
 
   /**
    * handleLogout
@@ -75,6 +119,19 @@ export default function Navbar() {
                 className="text-sm font-medium text-gray-700 hover:text-brand-600"
               >
                 Incoming
+              </Link>
+
+              <Link
+                to="/messages"
+                onClick={() => setUnreadCount(0)}
+                className="relative text-sm font-medium text-gray-700 hover:text-brand-600"
+              >
+                Messages
+                {unreadCount > 0 && (
+                  <span className="absolute -right-3 -top-2 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
               </Link>
 
               {user?.role === 'admin' && (
@@ -172,6 +229,22 @@ export default function Navbar() {
                   onClick={closeMobileMenu}
                 >
                   Incoming Requests
+                </Link>
+
+                <Link
+                  to="/messages"
+                  className="flex items-center gap-2 text-sm font-medium text-gray-700"
+                  onClick={() => {
+                    closeMobileMenu();
+                    setUnreadCount(0);
+                  }}
+                >
+                  Messages
+                  {unreadCount > 0 && (
+                    <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </span>
+                  )}
                 </Link>
 
                 {user?.role === 'admin' && (

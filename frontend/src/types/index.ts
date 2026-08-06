@@ -256,3 +256,36 @@ export interface AssetLocation {
 export interface NearbyAsset extends Asset {
   distanceMeters: number;
 }
+
+
+/**
+ * Conversation & Message types
+ * ------------------------------------------------------------------
+ * Mirror the backend's Conversation and Message models.
+ */
+
+export interface Conversation {
+  _id: string;
+  participants: User[];
+  asset?: Pick<Asset, '_id' | 'name' | 'images'>;
+  lastMessageAt: string;
+  lastMessageText?: string;
+  unreadCount?: number; // only present on getMyConversations results
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatMessage {
+  _id: string;
+  conversation: string;
+  sender: User;
+  text: string;
+  readBy: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NewMessageSocketPayload {
+  conversationId: string;
+  message: ChatMessage;
+}

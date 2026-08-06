@@ -1,62 +1,51 @@
-// Side-effect import that runs dotenv.config() as part of the import
-// itself. Using `import 'dotenv/config'` (rather than importing
-// dotenv and calling .config() separately) guarantees this executes
-// before any other import below it, even under tsx's ESM-style import
-// hoisting — a plain `import dotenv from 'dotenv'; dotenv.config();`
-// split across two statements can get reordered by the hoisting
-// behavior, causing env vars to be undefined in modules (like
-// cloudinary.ts) that read process.env at their own module-load time.
 import 'dotenv/config';
 
+import http from 'http';
 import app from './app';
 import connectDB from './config/db';
+import { initializeSocket } from './socket';
 
 /**
  * server.ts
  * ------------------------------------------------------------------
  * Application entry point. Responsibilities:
- *   1. Load environment variables (.env)
+ *   1. Load environment variables (via 'dotenv/config' side-effect import)
  *   2. Connect to MongoDB
- *   3. Start the HTTP server, listening on the configured port
- *   4. Register process-level safety nets for uncaught errors
- *
- * Deliberately separated from app.ts so the Express app itself stays
- * side-effect-free and testable (see app.ts notes).
+ *   3. Create a raw HTTP server wrapping the Express app, and attach
+ *      Socket.io to that SAME server — this is why we now import
+ *      Node's `http` module directly instead of calling app.listen()
+ *      as before: Socket.io needs to intercept the underlying HTTP
+ *      server's upgrade requests (for the WebSocket handshake), which
+ *      app.listen() would otherwise handle in a way Socket.io can't
+ *      hook into.
+ *   4. Start the HTTP server, listening on the configured port
+ *   5. Register process-level safety nets for uncaught errors
  */
 
 const PORT = process.env.PORT || 5000;
 
-/**
- * startServer
- * ------------------------------------------------------------------
- * Async bootstrap function. Connects to the database BEFORE binding
- * the HTTP listener — this guarantees the server never accepts
- * traffic while the DB connection is still pending or has failed
- * (connectDB() itself calls process.exit(1) on failure, so reaching
- * app.listen() implies a healthy DB connection).
- */
 const startServer = async (): Promise<void> => {
   try {
     await connectDB();
 
-    const server = app.listen(PORT, () => {
+    // Create the raw HTTP server explicitly (rather than app.listen())
+    // so Socket.io can attach to it.
+    const httpServer = http.createServer(app);
+
+    // Initialize Socket.io on the same server/port — no separate port
+    // or process needed.
+    initializeSocket(httpServer);
+
+    httpServer.listen(PORT, () => {
       console.log(
-        `ReBorrow API server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`
+        `ReBorrow API server (HTTP + WebSocket) running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`
       );
     });
 
-    // --- Graceful shutdown for the HTTP server itself ---
-    // Complements the MongoDB connection shutdown handlers already
-    // registered in db.ts. Ensures in-flight HTTP requests are allowed
-    // to complete before the process exits, rather than being dropped
-    // abruptly mid-response.
     const gracefulShutdown = (signal: string) => {
       console.log(`${signal} received: closing HTTP server gracefully`);
-      server.close(() => {
+      httpServer.close(() => {
         console.log('HTTP server closed');
-        // Note: mongoose.connection.close() is already handled by the
-        // SIGINT/SIGTERM listeners registered in db.ts — we don't
-        // duplicate that here to avoid double-closing the connection.
       });
     };
 
@@ -68,17 +57,6 @@ const startServer = async (): Promise<void> => {
   }
 };
 
-/**
- * Process-level safety nets
- * ------------------------------------------------------------------
- * Catches errors that fall completely outside Express's request/
- * response cycle — e.g., an unhandled Promise rejection from a
- * fire-and-forget async call, or a synchronous exception thrown
- * outside any try-catch. Without these, Node would either crash
- * silently or (in older versions) continue running in a corrupted
- * state. We log clearly and exit deliberately so process managers
- * (PM2, Docker, Kubernetes) can restart the process cleanly.
- */
 process.on('unhandledRejection', (reason: unknown) => {
   console.error('Unhandled Promise Rejection:', reason);
   process.exit(1);
