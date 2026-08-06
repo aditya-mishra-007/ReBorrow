@@ -4,6 +4,7 @@ import type {
   Asset,
   AssetStatus,
   CreateAssetPayload,
+  NearbyAsset,
   PaginatedApiResponse,
   UpdateAssetPayload,
 } from '@/types';
@@ -108,6 +109,10 @@ export async function createAsset(
   formData.append('description', payload.description);
   formData.append('category', payload.category);
 
+  if (payload.city) formData.append('city', payload.city);
+  if (payload.latitude !== undefined) formData.append('latitude', String(payload.latitude));
+  if (payload.longitude !== undefined) formData.append('longitude', String(payload.longitude));
+
   if (images && images.length > 0) {
     images.forEach((file) => formData.append('images', file));
   }
@@ -161,5 +166,30 @@ export async function deleteAssetImage(
   const response = await api.delete<ApiResponse<Asset>>(`/assets/${assetId}/images`, {
     data: { imageUrl },
   });
+  return response.data;
+}
+
+
+/**
+ * getNearbyAssets
+ * ------------------------------------------------------------------
+ * Fetches assets sorted by distance from a given coordinate. Public
+ * endpoint. Not paginated (returns up to 100 results, per the
+ * backend's aggregation limit) — deliberately simpler than the main
+ * getAssets() pagination, since "nearby" result sets are naturally
+ * self-limiting by radius rather than needing page controls.
+ */
+export interface GetNearbyAssetsParams {
+  lat: number;
+  lng: number;
+  radius?: number;
+  status?: AssetStatus;
+  category?: string;
+}
+
+export async function getNearbyAssets(
+  params: GetNearbyAssetsParams
+): Promise<ApiResponse<NearbyAsset[]>> {
+  const response = await api.get<ApiResponse<NearbyAsset[]>>('/assets/nearby', { params });
   return response.data;
 }

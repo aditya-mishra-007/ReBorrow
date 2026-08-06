@@ -6,6 +6,7 @@ import {
   updateAsset,
   deleteAsset,
   deleteAssetImage,
+  getNearbyAssets,
 } from '../controllers/assetController';
 import { protect, optionalAuth } from '../middleware/authMiddleware';
 import { uploadAssetImages } from '../middleware/uploadMiddleware';
@@ -25,6 +26,7 @@ import { uploadAssetImages } from '../middleware/uploadMiddleware';
 const router = Router();
 
 router.get('/', optionalAuth, getAssets);
+router.get('/nearby', getNearbyAssets);
 router.get('/:id', getAssetById);
 
 router.post('/', protect, uploadAssetImages, createAsset);

@@ -61,6 +61,7 @@ export interface Asset {
   status: AssetStatus;
   owner: User | string;
   images: string[];
+  location?: AssetLocation;
   createdAt: string;
   updatedAt: string;
 }
@@ -165,6 +166,9 @@ export interface CreateAssetPayload {
   name: string;
   description: string;
   category: string;
+  city?: string;
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface UpdateAssetPayload {
@@ -223,4 +227,32 @@ export interface AdminStats {
     requested: number;
     borrowed: number;
   };
+}
+
+
+/**
+ * AssetLocation
+ * ------------------------------------------------------------------
+ * Mirrors the backend's Asset.location shape. Optional — an asset
+ * may have no location data at all if it was created without it.
+ */
+export interface AssetLocation {
+  city?: string;
+  coordinates?: {
+    type: 'Point';
+    coordinates: [number, number]; // [longitude, latitude]
+  };
+}
+
+/**
+ * NearbyAsset
+ * ------------------------------------------------------------------
+ * Extends Asset with the extra `distanceMeters` field that only
+ * appears on results from GET /api/assets/nearby (added by the
+ * backend's $geoNear aggregation stage) — not present on regular
+ * getAssets() results, hence a distinct type rather than folding this
+ * into the base Asset interface.
+ */
+export interface NearbyAsset extends Asset {
+  distanceMeters: number;
 }

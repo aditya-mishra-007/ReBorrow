@@ -67,7 +67,7 @@ export const createAsset = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    const { name, description, category } = req.body;
+    const { name, description, category, city, latitude, longitude } = req.body;
 
     if (!name || !description || !category) {
       res.status(400).json({
@@ -75,6 +75,23 @@ export const createAsset = async (req: AuthRequest, res: Response): Promise<void
         message: 'Please provide name, description, and category',
       });
       return;
+    }
+
+    // Location is entirely optional — an asset can be listed without
+    // it, and will simply be excluded from "near me" searches (but
+    // still shows normally in the regular, non-location browse view).
+    let location: { city?: string; coordinates?: { type: 'Point'; coordinates: [number, number] } } | undefined;
+
+    if (latitude && longitude) {
+      const lat = parseFloat(String(latitude));
+      const lng = parseFloat(String(longitude));
+
+      if (!isNaN(lat) && !isNaN(lng) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        location = {
+          city: city ? String(city).trim() : undefined,
+          coordinates: { type: 'Point', coordinates: [lng, lat] }, // GeoJSON order: [lng, lat]
+        };
+      }
     }
 
     // req.files is populated by the uploadAssetImages multer middleware
@@ -102,6 +119,7 @@ export const createAsset = async (req: AuthRequest, res: Response): Promise<void
       category: String(category).trim(),
       owner: req.user._id,
       images: imageUrls,
+      location,
       // status intentionally omitted -> defaults to 'available'
     });
 
@@ -440,6 +458,97 @@ export const deleteAssetImage = async (req: AuthRequest, res: Response): Promise
   } catch (error) {
     console.error('Delete asset image error:', error);
     res.status(500).json({ success: false, message: 'Server error while removing image' });
+  }
+};
+
+
+/**
+ * @desc    Get assets near a given coordinate, sorted by distance
+ * @route   GET /api/assets/nearby
+ * @access  Public
+ *
+ * Query params:
+ *   - lat, lng: required, the search origin coordinates
+ *   - radius: search radius in kilometers (default: 25, max: 100)
+ *   - status/category: same optional filters as the main getAssets
+ *
+ * Uses MongoDB's $geoNear aggregation stage, which REQUIRES being the
+ * first stage in the pipeline and requires the 2dsphere index declared
+ * on Asset.ts's location.coordinates field. Returns assets sorted by
+ * ascending distance from the given point (nearest first) — $geoNear
+ * does this sorting automatically, no separate .sort() needed.
+ */
+export const getNearbyAssets = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { lat, lng, radius, status, category } = req.query;
+
+    const latitude = parseFloat(String(lat));
+    const longitude = parseFloat(String(lng));
+
+    if (isNaN(latitude) || isNaN(longitude)) {
+      res.status(400).json({
+        success: false,
+        message: 'Valid lat and lng query parameters are required',
+      });
+      return;
+    }
+
+    const radiusKm = Math.min(1500, Math.max(1, parseFloat(String(radius)) || 25));
+
+    const matchFilter: Record<string, unknown> = {};
+    if (status && ['available', 'requested', 'borrowed'].includes(String(status))) {
+      matchFilter.status = status;
+    }
+    if (category) {
+      matchFilter.category = { $regex: `^${String(category)}$`, $options: 'i' };
+    }
+
+    const assets = await Asset.aggregate([
+      {
+        $geoNear: {
+          near: { type: 'Point', coordinates: [longitude, latitude] },
+          distanceField: 'distanceMeters',
+          maxDistance: radiusKm * 1000, // $geoNear distance is in meters
+          spherical: true,
+          query: matchFilter,
+        },
+      },
+      { $limit: 100 }, // safety cap — this endpoint isn't paginated, so bound the result set
+      {
+        $lookup: {
+          from: 'users',
+          localField: 'owner',
+          foreignField: '_id',
+          as: 'owner',
+        },
+      },
+      { $unwind: '$owner' },
+      {
+        $project: {
+          name: 1,
+          description: 1,
+          category: 1,
+          status: 1,
+          images: 1,
+          location: 1,
+          createdAt: 1,
+          updatedAt: 1,
+          distanceMeters: 1,
+          'owner._id': 1,
+          'owner.name': 1,
+          'owner.email': 1,
+        },
+      },
+    ]);
+
+    res.status(200).json({
+      success: true,
+      count: assets.length,
+      data: assets,
+    });
+  } catch (error) {
+    console.error('Get nearby assets error:', error);
+    res.status(500).json({ success: false, message: 'Server error while fetching nearby assets' });
   }
 };
 

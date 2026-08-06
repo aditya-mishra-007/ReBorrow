@@ -24,6 +24,10 @@ export interface IAsset extends Document {
   status: AssetStatus;
   owner: Types.ObjectId;
   images: string[];
+  location?: {
+    city?: string;
+    coordinates?: [number, number]; // [longitude, latitude] — GeoJSON order, NOT [lat, lng]
+  };
   createdAt: Date;
   updatedAt: Date;
 }
@@ -78,6 +82,22 @@ const AssetSchema: Schema<IAsset> = new Schema(
       type: [String],
       default: [],
     },
+    // GeoJSON Point — required by MongoDB's 2dsphere index for
+    // geospatial queries ($near, $geoNear). Coordinates are stored in
+    // [longitude, latitude] order (GeoJSON standard), which is the
+    // OPPOSITE of the more commonly seen [latitude, longitude] order
+    // used by most mapping UIs and the browser's own Geolocation API —
+    // this is a well-known source of bugs, so every place that reads
+    // or writes coordinates.coordinates must be careful about the order.
+    location: {
+      city: { type: String, trim: true },
+      coordinates: {
+        type: { type: String, enum: ['Point'], default: 'Point' },
+        coordinates: {
+          type: [Number], // [longitude, latitude]
+        },
+      },
+    },
   },
   {
     timestamps: true, // Automatically manages createdAt / updatedAt
@@ -97,6 +117,7 @@ const AssetSchema: Schema<IAsset> = new Schema(
 AssetSchema.index({ owner: 1 });
 AssetSchema.index({ status: 1 });
 AssetSchema.index({ name: 'text', description: 'text', category: 'text' });
+AssetSchema.index({ 'location.coordinates': '2dsphere' });
 
 /**
  * Asset Model

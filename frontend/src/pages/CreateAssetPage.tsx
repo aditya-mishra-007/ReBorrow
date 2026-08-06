@@ -6,6 +6,8 @@ import * as assetApi from '@/api/assetApi';
 import { getErrorMessage } from '@/lib/api';
 import { CATEGORIES } from '@/constants/categories';
 import ImageUploadInput from '@/components/ImageUploadInput';
+import { getCurrentPosition, reverseGeocode } from '@/lib/geolocation';
+import { MapPin, Loader2 } from 'lucide-react';
 import type { CreateAssetPayload } from '@/types';
 
 /**
@@ -31,17 +33,56 @@ export default function CreateAssetPage() {
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [images, setImages] = useState<File[]>([]);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationCoords, setLocationCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   const {
     register,
     handleSubmit,
+    setValue,
+    watch,
     formState: { errors },
   } = useForm<CreateAssetPayload>();
+
+  const cityValue = watch('city');
+
+  /**
+   * handleUseMyLocation
+   * ------------------------------------------------------------------
+   * Captures the browser's current position, reverse-geocodes it to a
+   * city name, and pre-fills the (otherwise manually-editable) city
+   * field. Coordinates are stored separately in local state rather
+   * than a form field, since they're not something the user directly
+   * types — they ride along silently and get attached at submit time.
+   */
+  const handleUseMyLocation = async () => {
+    setIsLocating(true);
+    try {
+      const coords = await getCurrentPosition();
+      setLocationCoords({ lat: coords.latitude, lng: coords.longitude });
+
+      const city = await reverseGeocode(coords);
+      if (city) {
+        setValue('city', city);
+      } else {
+        toast('Location captured, but could not determine city name — feel free to enter it manually.');
+      }
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsLocating(false);
+    }
+  };
 
   const onSubmit = async (data: CreateAssetPayload) => {
     setIsSubmitting(true);
     try {
-      const { data: createdAsset } = await assetApi.createAsset(data, images);
+      const payload: CreateAssetPayload = {
+        ...data,
+        latitude: locationCoords?.lat,
+        longitude: locationCoords?.lng,
+      };
+      const { data: createdAsset } = await assetApi.createAsset(payload, images);
       toast.success('Item listed successfully!');
       navigate(`/assets/${createdAsset._id}`, { replace: true });
     } catch (error) {
@@ -138,6 +179,44 @@ export default function CreateAssetPage() {
             <div className="mt-1">
               <ImageUploadInput files={images} onChange={setImages} />
             </div>
+          </div>
+
+          {/* --- Location (optional) --- */}
+          <div>
+            <label htmlFor="city" className="block text-sm font-medium text-gray-700">
+              Location <span className="font-normal text-gray-400">(optional)</span>
+            </label>
+            <div className="mt-1 flex gap-2">
+              <input
+                id="city"
+                type="text"
+                placeholder="e.g., Lucknow"
+                className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus-visible:border-brand-500"
+                {...register('city')}
+              />
+              <button
+                type="button"
+                onClick={handleUseMyLocation}
+                disabled={isLocating}
+                className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-gray-300 px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isLocating ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <MapPin className="h-4 w-4" />
+                )}
+                Use my location
+              </button>
+            </div>
+            {locationCoords && cityValue && (
+              <p className="mt-1 text-xs text-gray-400">
+                Location captured — this helps nearby users find your listing.
+              </p>
+            )}
+            <p className="mt-1 text-xs text-gray-400">
+              Adding a location helps borrowers find items near them. You can also just type a
+              city name without using your precise location.
+            </p>
           </div>
 
           <button
