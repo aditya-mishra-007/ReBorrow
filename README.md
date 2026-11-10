@@ -353,14 +353,3 @@ http://localhost:5173
 | PATCH | `/:id/reject` | Owner | Reject Request |
 
 ---
-
-## 🔮 Future Enhancements
-
-- Cancel pending borrow requests
-- Image upload support
-- Pagination
-- Rate limiting
-- Email verification
-- Notifications
-- Asset categories with icons
-- Admin dashboard
