@@ -6,14 +6,7 @@ import { useAuth } from '@/context/AuthContext';
 import { getErrorMessage } from '@/lib/api';
 import type { LoginPayload } from '@/types';
 import ReBorrowLogo from '@/components/ReBorrowLogo';
-import { ArrowRight, Lock, Mail, UserCheck } from 'lucide-react';
-
-const COMMUNITY_USERS = [
-  { label: 'Priya Sharma', email: 'priya.sharma@gmail.com' },
-  { label: 'Aarav Mehta', email: 'aarav.mehta@gmail.com' },
-  { label: 'Neha Verma', email: 'neha.verma@gmail.com' },
-  { label: 'Rohan Gupta', email: 'rohan.gupta@gmail.com' },
-];
+import { ArrowRight, Lock, Mail } from 'lucide-react';
 
 export default function LoginPage() {
   const { login, isAuthenticated } = useAuth();
@@ -30,7 +23,6 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
-    setValue,
     formState: { errors },
   } = useForm<LoginPayload>();
 
@@ -49,11 +41,6 @@ export default function LoginPage() {
     }
   };
 
-  const selectUser = (email: string) => {
-    setValue('email', email);
-    setValue('password', 'Password123!');
-  };
-
   return (
     <div className="mx-auto max-w-md py-6 sm:py-10">
       <div className="overflow-hidden rounded-3xl border border-gray-200/90 bg-white p-8 shadow-xl sm:p-10">
@@ -67,27 +54,7 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Community Members Quick Selector */}
-        <div className="mt-6 rounded-2xl border border-brand-100 bg-brand-50/50 p-3.5 text-xs space-y-2">
-          <div className="flex items-center gap-1.5 text-brand-900 font-bold">
-            <UserCheck className="h-3.5 w-3.5 text-brand-600" />
-            <span>Select Community Account:</span>
-          </div>
-          <div className="grid grid-cols-2 gap-1.5">
-            {COMMUNITY_USERS.map((u) => (
-              <button
-                key={u.email}
-                type="button"
-                onClick={() => selectUser(u.email)}
-                className="truncate rounded-xl border border-brand-200 bg-white px-2.5 py-1.5 text-left text-[11px] font-semibold text-brand-900 shadow-2xs hover:bg-brand-50 hover:border-brand-300 transition-colors"
-              >
-                {u.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4" noValidate>
+        <form onSubmit={handleSubmit(onSubmit)} className="mt-8 space-y-4" noValidate>
           <div>
             <label htmlFor="email" className="block text-xs font-semibold text-gray-700">
               Email Address

@@ -62,7 +62,7 @@ export default function RegisterPage() {
                 id="name"
                 type="text"
                 autoComplete="name"
-                placeholder="Priya Sharma"
+                placeholder="Enter your full name"
                 className="w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-3.5 text-xs font-medium text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                 {...register('name', {
                   required: 'Name is required',
@@ -84,7 +84,7 @@ export default function RegisterPage() {
                 id="email"
                 type="email"
                 autoComplete="email"
-                placeholder="priya@example.com"
+                placeholder="name@example.com"
                 className="w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-3.5 text-xs font-medium text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
                 {...register('email', {
                   required: 'Email is required',
