@@ -14,9 +14,16 @@ import {
   Sparkles,
   SlidersHorizontal,
   ImageOff,
+  Compass,
 } from 'lucide-react';
 import Pagination from '@/components/Pagination';
-import NearbyToggle from '@/components/NearbyToggle';
+import LocationPromptModal from '@/components/LocationPromptModal';
+import {
+  getSavedUserLocation,
+  saveUserLocation,
+  clearSavedUserLocation,
+  type UserLocation,
+} from '@/lib/geolocation';
 import {
   isPopulatedOwner,
   type Asset,
@@ -33,12 +40,11 @@ const STATUS_FILTERS: { label: string; value: AssetStatus | 'all' }[] = [
 ];
 
 const CONDITION_FILTERS = ['all', 'New', 'Like New', 'Good', 'Fair'] as const;
-
+const RADIUS_OPTIONS = [15, 25, 50, 100, 250];
 const PAGE_SIZE = 12;
-const DEFAULT_RADIUS = 25;
 
 export default function HomePage() {
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [assets, setAssets] = useState<Asset[] | NearbyAsset[]>([]);
   const [pagination, setPagination] = useState<PaginationMeta | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [searchInput, setSearchInput] = useState('');
@@ -48,10 +54,60 @@ export default function HomePage() {
   const [statusFilter, setStatusFilter] = useState<AssetStatus | 'all'>('all');
   const [currentPage, setCurrentPage] = useState(1);
 
-  // --- Nearby mode state ---
-  const [isNearbyMode, setIsNearbyMode] = useState(false);
-  const [nearbyCoords, setNearbyCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [nearbyRadius, setNearbyRadius] = useState(DEFAULT_RADIUS);
+  // --- Location state ---
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(() => getSavedUserLocation());
+  const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
+  const [searchRadius, setSearchRadius] = useState<number>(50);
+
+  // Prompt for location on first visit if not saved
+  useEffect(() => {
+    const saved = getSavedUserLocation();
+    if (!saved) {
+      const timer = setTimeout(() => {
+        setIsLocationModalOpen(true);
+      }, 400);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, []);
+
+  // Fetch items based on location (Nearby mode) or nationwide (Regular mode)
+  const fetchLocationAssets = useCallback(async () => {
+    if (!userLocation) return;
+    setIsLoading(true);
+    try {
+      const { data } = await assetApi.getNearbyAssets({
+        lat: userLocation.latitude,
+        lng: userLocation.longitude,
+        radius: searchRadius,
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        category: selectedCategory === 'all' ? undefined : selectedCategory,
+      });
+
+      let filtered = data;
+      if (activeSearch) {
+        const query = activeSearch.toLowerCase();
+        filtered = filtered.filter(
+          (a) =>
+            a.name.toLowerCase().includes(query) ||
+            a.description.toLowerCase().includes(query) ||
+            a.category.toLowerCase().includes(query)
+        );
+      }
+      if (selectedCondition !== 'all') {
+        filtered = filtered.filter(
+          (a) => a.condition?.toLowerCase() === selectedCondition.toLowerCase()
+        );
+      }
+
+      setAssets(filtered);
+      setPagination(null); // nearby mode is distance-ranked
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsLoading(false);
+    }
+  }, [userLocation, searchRadius, statusFilter, selectedCategory, activeSearch, selectedCondition]);
 
   const fetchRegularAssets = useCallback(async () => {
     setIsLoading(true);
@@ -64,7 +120,6 @@ export default function HomePage() {
         limit: PAGE_SIZE,
       });
 
-      // Filter by condition locally if specified (or backend condition filter)
       let filtered = data;
       if (selectedCondition !== 'all') {
         filtered = filtered.filter(
@@ -81,45 +136,13 @@ export default function HomePage() {
     }
   }, [activeSearch, selectedCategory, selectedCondition, statusFilter, currentPage]);
 
-  const fetchNearbyAssets = useCallback(async () => {
-    if (!nearbyCoords) return;
-    setIsLoading(true);
-    try {
-      const { data } = await assetApi.getNearbyAssets({
-        lat: nearbyCoords.lat,
-        lng: nearbyCoords.lng,
-        radius: nearbyRadius,
-        status: statusFilter === 'all' ? undefined : statusFilter,
-      });
-
-      let filtered = data;
-      if (selectedCategory !== 'all') {
-        filtered = filtered.filter(
-          (a) => a.category.toLowerCase() === selectedCategory.toLowerCase()
-        );
-      }
-      if (selectedCondition !== 'all') {
-        filtered = filtered.filter(
-          (a) => a.condition?.toLowerCase() === selectedCondition.toLowerCase()
-        );
-      }
-
-      setAssets(filtered);
-      setPagination(null);
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [nearbyCoords, nearbyRadius, statusFilter, selectedCategory, selectedCondition]);
-
   useEffect(() => {
-    if (isNearbyMode) {
-      fetchNearbyAssets();
+    if (userLocation) {
+      fetchLocationAssets();
     } else {
       fetchRegularAssets();
     }
-  }, [isNearbyMode, fetchRegularAssets, fetchNearbyAssets]);
+  }, [userLocation, fetchLocationAssets, fetchRegularAssets]);
 
   const handleSearchSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -142,37 +165,45 @@ export default function HomePage() {
     window.scrollTo({ top: 350, behavior: 'smooth' });
   };
 
-  const handleNearbyActivate = (coords: { lat: number; lng: number }) => {
-    setNearbyCoords(coords);
-    setIsNearbyMode(true);
-  };
-
-  const handleNearbyClear = () => {
-    setIsNearbyMode(false);
-    setNearbyCoords(null);
+  const handleLocationSelected = (loc: UserLocation | null) => {
+    if (loc) {
+      setUserLocation(loc);
+      saveUserLocation(loc);
+    } else {
+      setUserLocation(null);
+      clearSavedUserLocation();
+    }
     setCurrentPage(1);
   };
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-8">
+      {/* ===================== LOCATION PROMPT MODAL ===================== */}
+      <LocationPromptModal
+        isOpen={isLocationModalOpen}
+        onClose={() => setIsLocationModalOpen(false)}
+        onLocationSelected={handleLocationSelected}
+        currentLocation={userLocation}
+      />
+
       {/* ===================== HERO SECTION ===================== */}
-      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-900 via-brand-800 to-indigo-950 p-8 text-white shadow-xl sm:p-12 lg:p-16">
+      <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-brand-900 via-brand-800 to-indigo-950 p-8 text-white shadow-xl sm:p-12 lg:p-14">
         <div className="absolute inset-0 bg-[radial-gradient(#ffffff_1px,transparent_1px)] [background-size:16px_16px] opacity-10" />
 
-        <div className="relative z-10 max-w-3xl space-y-6">
+        <div className="relative z-10 max-w-3xl space-y-5">
           <div className="inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-brand-700/40 px-3.5 py-1 text-xs font-semibold text-brand-200 backdrop-blur-md">
             <Sparkles className="h-3.5 w-3.5 text-brand-300" />
-            <span>Community-Powered Peer Lending</span>
+            <span>Verified Local Neighborhood Lending</span>
           </div>
 
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl">
             Borrow what you need. <br />
-            <span className="text-brand-300">Share what you own.</span>
+            <span className="text-brand-300">Right in your neighborhood.</span>
           </h1>
 
-          <p className="text-base leading-relaxed text-brand-100/90 sm:text-lg">
-            Access pro power tools, cameras, camping gear, and appliances right in your neighborhood.
-            Save money, cut waste, and build trust.
+          <p className="text-sm leading-relaxed text-brand-100/90 sm:text-base">
+            Discover power tools, DSLR cameras, outdoor camping gear, and appliances available
+            near you from trusted community members.
           </p>
 
           {/* Hero Search Box */}
@@ -186,24 +217,22 @@ export default function HomePage() {
                 type="text"
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Search drills, DSLR cameras, tents, drones..."
-                disabled={isNearbyMode}
-                className="w-full rounded-xl border-0 py-3 pl-11 pr-4 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-0 disabled:bg-gray-50"
+                placeholder="Search drills, tents, cameras, projectors..."
+                className="w-full rounded-xl border-0 py-3 pl-11 pr-4 text-xs font-medium text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-0"
               />
             </div>
 
             <button
               type="submit"
-              disabled={isNearbyMode}
-              className="flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:bg-brand-700 active:scale-98 disabled:opacity-50"
+              className="flex items-center justify-center gap-2 rounded-xl bg-brand-600 px-6 py-3 text-xs font-bold text-white shadow-sm transition-all hover:bg-brand-700 active:scale-98"
             >
               <Search className="h-4 w-4" />
-              <span>Search Catalog</span>
+              <span>Search Items</span>
             </button>
           </form>
 
-          {/* Quick Value Metrics */}
-          <div className="grid grid-cols-2 gap-4 pt-4 border-t border-brand-700/60 sm:grid-cols-4 text-xs font-medium text-brand-200">
+          {/* Quick Metrics */}
+          <div className="grid grid-cols-2 gap-4 pt-3 border-t border-brand-700/60 sm:grid-cols-4 text-xs font-medium text-brand-200">
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-emerald-400" />
               <span>Verified Lenders</span>
@@ -224,10 +253,72 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* ===================== LOCATION STATUS BANNER ===================== */}
+      <section className="flex flex-col gap-3 rounded-2xl border border-brand-100 bg-brand-50/70 p-4 shadow-xs sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-600 text-white shadow-xs">
+            <MapPin className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-brand-900">
+                {userLocation ? `Location: ${userLocation.city}` : 'Browsing All India'}
+              </span>
+              {userLocation?.source === 'gps' && (
+                <span className="rounded-md bg-brand-200/60 px-1.5 py-0.5 text-[10px] font-bold text-brand-800">
+                  GPS Active
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-brand-700/90 mt-0.5">
+              {userLocation
+                ? `Showing gear and equipment within ${searchRadius} km of your area`
+                : 'Set your neighborhood to see items closest to you'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {userLocation && (
+            <div className="flex items-center gap-1.5 text-xs text-gray-600">
+              <span className="text-[11px] font-semibold text-brand-900">Radius:</span>
+              <select
+                value={searchRadius}
+                onChange={(e) => setSearchRadius(Number(e.target.value))}
+                className="rounded-xl border border-brand-200 bg-white px-2.5 py-1.5 text-xs font-bold text-brand-800 focus:outline-none focus:ring-1 focus:ring-brand-500 shadow-2xs"
+              >
+                {RADIUS_OPTIONS.map((r) => (
+                  <option key={r} value={r}>
+                    {r} km
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <button
+            onClick={() => setIsLocationModalOpen(true)}
+            className="flex items-center gap-1.5 rounded-xl border border-brand-300 bg-white px-3.5 py-1.5 text-xs font-bold text-brand-700 hover:bg-brand-100 shadow-xs transition-colors"
+          >
+            <Compass className="h-3.5 w-3.5" />
+            <span>{userLocation ? 'Change Location' : 'Set My Location'}</span>
+          </button>
+
+          {userLocation && (
+            <button
+              onClick={() => handleLocationSelected(null)}
+              className="text-xs font-semibold text-gray-500 hover:text-gray-800 underline px-1"
+            >
+              Show all
+            </button>
+          )}
+        </div>
+      </section>
+
       {/* ===================== CATEGORY PILLS ===================== */}
       <section className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold uppercase tracking-wider text-gray-500">
+          <h2 className="text-xs font-bold uppercase tracking-wider text-gray-500">
             Browse by Category
           </h2>
           {selectedCategory !== 'all' && (
@@ -235,7 +326,7 @@ export default function HomePage() {
               onClick={() => handleCategorySelect('all')}
               className="text-xs font-semibold text-brand-600 hover:text-brand-800"
             >
-              Clear filter
+              Clear category filter
             </button>
           )}
         </div>
@@ -274,75 +365,71 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* ===================== FILTERS & CONTROLS ===================== */}
-      <section className="space-y-4 rounded-2xl border border-gray-200/80 bg-white p-4 shadow-sm sm:p-5">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          {/* Status Tabs */}
-          <div className="flex flex-wrap gap-1.5">
-            {STATUS_FILTERS.map((filter) => (
-              <button
-                key={filter.value}
-                onClick={() => handleStatusFilterChange(filter.value)}
-                className={`rounded-lg px-3.5 py-1.5 text-xs font-medium transition-colors ${
-                  statusFilter === filter.value
-                    ? 'bg-brand-50 text-brand-700 font-semibold ring-1 ring-brand-200'
-                    : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
-                }`}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Condition Dropdown & Active Filter Indicators */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2 text-xs text-gray-500">
-              <SlidersHorizontal className="h-3.5 w-3.5" />
-              <span>Condition:</span>
-              <select
-                value={selectedCondition}
-                onChange={(e) => {
-                  setSelectedCondition(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 focus:border-brand-500 focus:outline-none"
-              >
-                {CONDITION_FILTERS.map((cond) => (
-                  <option key={cond} value={cond}>
-                    {cond === 'all' ? 'All Conditions' : cond}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+      {/* ===================== FILTER CONTROLS ===================== */}
+      <section className="flex flex-col gap-4 rounded-2xl border border-gray-200/80 bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+        {/* Status Tabs */}
+        <div className="flex flex-wrap gap-1.5">
+          {STATUS_FILTERS.map((filter) => (
+            <button
+              key={filter.value}
+              onClick={() => handleStatusFilterChange(filter.value)}
+              className={`rounded-lg px-3.5 py-1.5 text-xs font-medium transition-colors ${
+                statusFilter === filter.value
+                  ? 'bg-brand-50 text-brand-700 font-semibold ring-1 ring-brand-200'
+                  : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'
+              }`}
+            >
+              {filter.label}
+            </button>
+          ))}
         </div>
 
-        {/* Near Me Location Bar */}
-        <div className="border-t border-gray-100 pt-3">
-          <NearbyToggle
-            isActive={isNearbyMode}
-            radius={nearbyRadius}
-            onActivate={handleNearbyActivate}
-            onRadiusChange={setNearbyRadius}
-            onClear={handleNearbyClear}
-          />
+        {/* Condition Filter Dropdown */}
+        <div className="flex items-center gap-2 text-xs text-gray-500">
+          <SlidersHorizontal className="h-3.5 w-3.5" />
+          <span>Condition:</span>
+          <select
+            value={selectedCondition}
+            onChange={(e) => {
+              setSelectedCondition(e.target.value);
+              setCurrentPage(1);
+            }}
+            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 focus:border-brand-500 focus:outline-none"
+          >
+            {CONDITION_FILTERS.map((cond) => (
+              <option key={cond} value={cond}>
+                {cond === 'all' ? 'All Conditions' : cond}
+              </option>
+            ))}
+          </select>
         </div>
       </section>
 
       {/* ===================== ASSET LIST / GRID ===================== */}
       <section className="space-y-6">
-        {/* Results summary header */}
         <div className="flex items-center justify-between text-xs text-gray-500 font-medium">
-          {!isLoading && !isNearbyMode && pagination && (
-            <span>
-              Showing {assets.length} of {pagination.totalCount} community items
-              {activeSearch && ` matching "${activeSearch}"`}
-            </span>
-          )}
-          {!isLoading && isNearbyMode && (
-            <span>
-              Found {assets.length} items within {nearbyRadius} km of your location
-            </span>
+          <span>
+            {userLocation ? (
+              <>
+                Found {assets.length} items within {searchRadius} km of <b>{userLocation.city}</b>
+              </>
+            ) : pagination ? (
+              <>
+                Showing {assets.length} of {pagination.totalCount} items across all locations
+              </>
+            ) : (
+              `Showing ${assets.length} items`
+            )}
+            {activeSearch && ` matching "${activeSearch}"`}
+          </span>
+
+          {userLocation && assets.length === 0 && !isLoading && (
+            <button
+              onClick={() => setSearchRadius((prev) => Math.min(250, prev + 50))}
+              className="text-xs font-bold text-brand-600 hover:text-brand-800"
+            >
+              + Expand search radius
+            </button>
           )}
         </div>
 
@@ -356,24 +443,32 @@ export default function HomePage() {
         ) : assets.length === 0 ? (
           <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-12 text-center shadow-sm">
             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-brand-600">
-              <Search className="h-6 w-6" />
+              <MapPin className="h-6 w-6" />
             </div>
-            <h3 className="mt-4 text-base font-semibold text-gray-900">No items match your criteria</h3>
-            <p className="mt-1 text-sm text-gray-500 max-w-sm mx-auto">
-              Try relaxing your category or status filters, or check back soon as neighbors add new items.
+            <h3 className="mt-4 text-base font-semibold text-gray-900">
+              {userLocation
+                ? `No items found within ${searchRadius} km of ${userLocation.city}`
+                : 'No items match your criteria'}
+            </h3>
+            <p className="mt-1 text-xs text-gray-500 max-w-sm mx-auto">
+              {userLocation
+                ? 'Try expanding your distance radius, switching cities, or viewing items nationwide.'
+                : 'Try adjusting your search keywords or resetting category filters.'}
             </p>
-            <div className="mt-6 flex justify-center gap-3">
+            <div className="mt-6 flex flex-wrap justify-center gap-3">
+              {userLocation && (
+                <button
+                  onClick={() => setSearchRadius(250)}
+                  className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white hover:bg-brand-700"
+                >
+                  Expand Radius to 250 km
+                </button>
+              )}
               <button
-                onClick={() => {
-                  setSelectedCategory('all');
-                  setSelectedCondition('all');
-                  setStatusFilter('all');
-                  setActiveSearch('');
-                  setSearchInput('');
-                }}
-                className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white hover:bg-brand-700"
+                onClick={() => handleLocationSelected(null)}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
               >
-                Reset All Filters
+                Browse All India
               </button>
             </div>
           </div>
@@ -385,7 +480,7 @@ export default function HomePage() {
               ))}
             </div>
 
-            {!isNearbyMode && pagination && (
+            {!userLocation && pagination && (
               <div className="pt-4">
                 <Pagination
                   currentPage={pagination.currentPage}
@@ -402,12 +497,12 @@ export default function HomePage() {
 }
 
 /**
- * High-Fidelity AssetCard
+ * High-Fidelity AssetCard with distance badge and details
  */
 function AssetCard({ asset }: { asset: Asset | NearbyAsset }) {
   const ownerName = isPopulatedOwner(asset.owner) ? asset.owner.name : 'Neighbor';
   const thumbnail = asset.images?.[0];
-  const distanceKm = 'distanceMeters' in asset ? asset.distanceMeters / 1000 : null;
+  const distanceKm = 'distanceMeters' in asset ? (asset as NearbyAsset).distanceMeters / 1000 : null;
 
   const statusStyles: Record<AssetStatus, { badge: string; label: string }> = {
     available: { badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'Available' },
@@ -467,8 +562,8 @@ function AssetCard({ asset }: { asset: Asset | NearbyAsset }) {
 
         {/* Distance Badge */}
         {distanceKm !== null && (
-          <span className="absolute bottom-2 right-2 rounded-md bg-black/75 px-2 py-0.5 text-[11px] font-medium text-white backdrop-blur-xs">
-            {distanceKm < 1 ? '<1 km' : `${distanceKm.toFixed(1)} km`} away
+          <span className="absolute bottom-2 right-2 rounded-md bg-black/75 px-2 py-0.5 text-[11px] font-bold text-white backdrop-blur-xs shadow-xs">
+            {distanceKm < 1 ? '< 1 km away' : `${distanceKm.toFixed(1)} km away`}
           </span>
         )}
       </div>
@@ -478,8 +573,8 @@ function AssetCard({ asset }: { asset: Asset | NearbyAsset }) {
         <div className="mb-1 flex items-center justify-between text-xs text-gray-500">
           <CategoryBadge category={asset.category} />
           {asset.location?.city && (
-            <span className="flex items-center gap-1 text-gray-400">
-              <MapPin className="h-3 w-3" />
+            <span className="flex items-center gap-1 font-semibold text-gray-500">
+              <MapPin className="h-3 w-3 text-brand-600" />
               {asset.location.city}
             </span>
           )}
@@ -490,7 +585,7 @@ function AssetCard({ asset }: { asset: Asset | NearbyAsset }) {
         </h3>
 
         {asset.brand && (
-          <p className="text-xs font-medium text-brand-700/80">{asset.brand}</p>
+          <p className="text-xs font-semibold text-brand-700/80">{asset.brand}</p>
         )}
 
         <p className="mt-2 line-clamp-2 text-xs leading-relaxed text-gray-500 flex-1">

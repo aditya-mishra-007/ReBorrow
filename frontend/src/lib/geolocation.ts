@@ -88,3 +88,50 @@ export async function reverseGeocode(coords: Coordinates): Promise<string | null
     return null;
   }
 }
+
+export interface UserLocation {
+  city: string;
+  latitude: number;
+  longitude: number;
+  source: 'gps' | 'city';
+}
+
+export const POPULAR_CITIES: Record<string, { city: string; latitude: number; longitude: number }> = {
+  Mumbai: { city: 'Mumbai', latitude: 18.9402, longitude: 72.8777 },
+  Delhi: { city: 'Delhi', latitude: 28.7041, longitude: 77.1025 },
+  Bangalore: { city: 'Bangalore', latitude: 12.9716, longitude: 77.5946 },
+  Pune: { city: 'Pune', latitude: 18.5204, longitude: 73.8567 },
+  Hyderabad: { city: 'Hyderabad', latitude: 17.3850, longitude: 78.4867 },
+  Chennai: { city: 'Chennai', latitude: 13.0827, longitude: 80.2707 },
+  Kolkata: { city: 'Kolkata', latitude: 22.5726, longitude: 88.3639 },
+  Ahmedabad: { city: 'Ahmedabad', latitude: 23.0225, longitude: 72.5714 },
+  Jaipur: { city: 'Jaipur', latitude: 26.9124, longitude: 75.7873 },
+  Lucknow: { city: 'Lucknow', latitude: 26.8467, longitude: 80.9462 },
+};
+
+const LOCATION_STORAGE_KEY = 'reborrow_user_location';
+
+export function getSavedUserLocation(): UserLocation | null {
+  try {
+    const raw = localStorage.getItem(LOCATION_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveUserLocation(location: UserLocation): void {
+  try {
+    localStorage.setItem(LOCATION_STORAGE_KEY, JSON.stringify(location));
+  } catch {
+    // Non-critical
+  }
+}
+
+export function clearSavedUserLocation(): void {
+  try {
+    localStorage.removeItem(LOCATION_STORAGE_KEY);
+  } catch {
+    // Non-critical
+  }
+}
