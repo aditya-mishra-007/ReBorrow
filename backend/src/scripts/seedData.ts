@@ -380,7 +380,7 @@ function getSeedAssets(ownerId: mongoose.Types.ObjectId) {
       brand: 'Panasonic',
       borrowingCostPerDay: 400,
       securityDeposit: 8000,
-      images: ['https://images.unsplash.com/photo-1495121605193-b116b5b9c5a9?w=800&q=80'],
+      images: ['https://images.unsplash.com/photo-1502920917128-1aa500764cbd?w=800&auto=format&fit=crop&q=80'],
       location: makeLocation(CITIES.Hyderabad),
       specifications: {
         'Sensor': '16 MP Micro Four Thirds',

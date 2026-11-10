@@ -15,7 +15,7 @@ import { getErrorMessage } from '@/lib/api';
  * and radius selection UI.
  */
 
-const RADIUS_OPTIONS = [10, 25, 50, 100, 250];
+const RADIUS_OPTIONS = [2, 3, 5, 8, 10];
 
 interface NearbyToggleProps {
   isActive: boolean;

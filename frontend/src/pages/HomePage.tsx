@@ -40,8 +40,12 @@ const STATUS_FILTERS: { label: string; value: AssetStatus | 'all' }[] = [
 ];
 
 const CONDITION_FILTERS = ['all', 'New', 'Like New', 'Good', 'Fair'] as const;
-const RADIUS_OPTIONS = [15, 25, 50, 100, 250];
+// Viable local neighborhood radii (strictly <= 10 km)
+const RADIUS_OPTIONS = [2, 3, 5, 8, 10];
 const PAGE_SIZE = 12;
+
+// In-memory cache for butter-smooth 0ms category/filter switching
+const assetMemoryCache = new Map<string, any>();
 
 export default function HomePage() {
   const [assets, setAssets] = useState<Asset[] | NearbyAsset[]>([]);
@@ -54,10 +58,10 @@ export default function HomePage() {
   const [statusFilter, setStatusFilter] = useState<AssetStatus | 'all'>('all');
   const [currentPage, setCurrentPage] = useState(1);
 
-  // --- Location state ---
+  // --- Location state (default 5 km for viable neighborhood borrowing) ---
   const [userLocation, setUserLocation] = useState<UserLocation | null>(() => getSavedUserLocation());
   const [isLocationModalOpen, setIsLocationModalOpen] = useState(false);
-  const [searchRadius, setSearchRadius] = useState<number>(50);
+  const [searchRadius, setSearchRadius] = useState<number>(5);
 
   // Prompt for location on first visit if not saved
   useEffect(() => {
@@ -65,15 +69,41 @@ export default function HomePage() {
     if (!saved) {
       const timer = setTimeout(() => {
         setIsLocationModalOpen(true);
-      }, 400);
+      }, 350);
       return () => clearTimeout(timer);
     }
     return undefined;
   }, []);
 
-  // Fetch items based on location (Nearby mode) or nationwide (Regular mode)
+  // Fetch items based on location (Nearby mode) with memory cache
   const fetchLocationAssets = useCallback(async () => {
     if (!userLocation) return;
+    const cacheKey = `nearby_${userLocation.latitude.toFixed(3)}_${userLocation.longitude.toFixed(3)}_${searchRadius}_${selectedCategory}_${statusFilter}`;
+
+    // Instant cache hit for 0ms transition
+    if (assetMemoryCache.has(cacheKey)) {
+      const cached = assetMemoryCache.get(cacheKey);
+      let filtered = cached;
+      if (activeSearch) {
+        const query = activeSearch.toLowerCase();
+        filtered = filtered.filter(
+          (a: any) =>
+            a.name.toLowerCase().includes(query) ||
+            a.description.toLowerCase().includes(query) ||
+            a.category.toLowerCase().includes(query)
+        );
+      }
+      if (selectedCondition !== 'all') {
+        filtered = filtered.filter(
+          (a: any) => a.condition?.toLowerCase() === selectedCondition.toLowerCase()
+        );
+      }
+      setAssets(filtered);
+      setPagination(null);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const { data } = await assetApi.getNearbyAssets({
@@ -83,6 +113,8 @@ export default function HomePage() {
         status: statusFilter === 'all' ? undefined : statusFilter,
         category: selectedCategory === 'all' ? undefined : selectedCategory,
       });
+
+      assetMemoryCache.set(cacheKey, data);
 
       let filtered = data;
       if (activeSearch) {
@@ -101,7 +133,7 @@ export default function HomePage() {
       }
 
       setAssets(filtered);
-      setPagination(null); // nearby mode is distance-ranked
+      setPagination(null);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -110,6 +142,16 @@ export default function HomePage() {
   }, [userLocation, searchRadius, statusFilter, selectedCategory, activeSearch, selectedCondition]);
 
   const fetchRegularAssets = useCallback(async () => {
+    const cacheKey = `reg_${activeSearch}_${selectedCategory}_${statusFilter}_${currentPage}_${selectedCondition}`;
+
+    if (assetMemoryCache.has(cacheKey)) {
+      const cached = assetMemoryCache.get(cacheKey);
+      setAssets(cached.data);
+      setPagination(cached.pagination);
+      setIsLoading(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
       const { data, pagination: paginationMeta } = await assetApi.getAssets({
@@ -127,6 +169,7 @@ export default function HomePage() {
         );
       }
 
+      assetMemoryCache.set(cacheKey, { data: filtered, pagination: paginationMeta });
       setAssets(filtered);
       setPagination(paginationMeta);
     } catch (error) {
@@ -193,17 +236,17 @@ export default function HomePage() {
         <div className="relative z-10 max-w-3xl space-y-5">
           <div className="inline-flex items-center gap-2 rounded-full border border-brand-400/30 bg-brand-700/40 px-3.5 py-1 text-xs font-semibold text-brand-200 backdrop-blur-md">
             <Sparkles className="h-3.5 w-3.5 text-brand-300" />
-            <span>Verified Local Neighborhood Lending</span>
+            <span>Local Neighborhood Borrowing • Within 5 km</span>
           </div>
 
           <h1 className="text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl">
             Borrow what you need. <br />
-            <span className="text-brand-300">Right in your neighborhood.</span>
+            <span className="text-brand-300">Within 5 km of your home.</span>
           </h1>
 
           <p className="text-sm leading-relaxed text-brand-100/90 sm:text-base">
-            Discover power tools, DSLR cameras, outdoor camping gear, and appliances available
-            near you from trusted community members.
+            Discover power tools, DSLR cameras, outdoor camping gear, and appliances right around the
+            corner from trusted neighbors in your community.
           </p>
 
           {/* Hero Search Box */}
@@ -262,7 +305,7 @@ export default function HomePage() {
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold text-brand-900">
-                {userLocation ? `Location: ${userLocation.city}` : 'Browsing All India'}
+                {userLocation ? `Location: ${userLocation.city}` : 'Browsing All Locations'}
               </span>
               {userLocation?.source === 'gps' && (
                 <span className="rounded-md bg-brand-200/60 px-1.5 py-0.5 text-[10px] font-bold text-brand-800">
@@ -272,7 +315,7 @@ export default function HomePage() {
             </div>
             <p className="text-[11px] text-brand-700/90 mt-0.5">
               {userLocation
-                ? `Showing gear and equipment within ${searchRadius} km of your area`
+                ? `Showing gear and equipment within ${searchRadius} km of your area (viable walking/driving pickup)`
                 : 'Set your neighborhood to see items closest to you'}
             </p>
           </div>
@@ -425,10 +468,10 @@ export default function HomePage() {
 
           {userLocation && assets.length === 0 && !isLoading && (
             <button
-              onClick={() => setSearchRadius((prev) => Math.min(250, prev + 50))}
+              onClick={() => setSearchRadius(10)}
               className="text-xs font-bold text-brand-600 hover:text-brand-800"
             >
-              + Expand search radius
+              + Expand search radius to 10 km
             </button>
           )}
         </div>
@@ -452,23 +495,23 @@ export default function HomePage() {
             </h3>
             <p className="mt-1 text-xs text-gray-500 max-w-sm mx-auto">
               {userLocation
-                ? 'Try expanding your distance radius, switching cities, or viewing items nationwide.'
+                ? 'Try expanding your distance radius to 8-10 km, switching cities, or viewing items nationwide.'
                 : 'Try adjusting your search keywords or resetting category filters.'}
             </p>
             <div className="mt-6 flex flex-wrap justify-center gap-3">
-              {userLocation && (
+              {userLocation && searchRadius < 10 && (
                 <button
-                  onClick={() => setSearchRadius(250)}
+                  onClick={() => setSearchRadius(10)}
                   className="rounded-lg bg-brand-600 px-4 py-2 text-xs font-semibold text-white hover:bg-brand-700"
                 >
-                  Expand Radius to 250 km
+                  Expand Radius to 10 km
                 </button>
               )}
               <button
                 onClick={() => handleLocationSelected(null)}
                 className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50"
               >
-                Browse All India
+                Browse All Locations
               </button>
             </div>
           </div>
@@ -532,6 +575,7 @@ function AssetCard({ asset }: { asset: Asset | NearbyAsset }) {
             src={thumbnail}
             alt={asset.name}
             loading="lazy"
+            decoding="async"
             className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         ) : (

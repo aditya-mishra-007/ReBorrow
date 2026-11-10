@@ -218,7 +218,8 @@ export const getAssets = async (req: AuthRequest, res: Response): Promise<void> 
         .populate('owner', 'name email')
         .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(parsedLimit),
+        .limit(parsedLimit)
+        .lean(),
     ]);
 
     const totalPages = Math.max(1, Math.ceil(totalCount / parsedLimit));

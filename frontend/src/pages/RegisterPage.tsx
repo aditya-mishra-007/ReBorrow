@@ -5,7 +5,8 @@ import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { getErrorMessage } from '@/lib/api';
 import type { RegisterPayload } from '@/types';
-import { Sparkles, ArrowRight, Lock, Mail, User } from 'lucide-react';
+import ReBorrowLogo from '@/components/ReBorrowLogo';
+import { ArrowRight, Lock, Mail, User } from 'lucide-react';
 
 export default function RegisterPage() {
   const { register: registerUser, isAuthenticated } = useAuth();
@@ -41,10 +42,10 @@ export default function RegisterPage() {
     <div className="mx-auto max-w-md py-6 sm:py-10">
       <div className="overflow-hidden rounded-3xl border border-gray-200/90 bg-white p-8 shadow-xl sm:p-10">
         <div className="text-center">
-          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-sm">
-            <Sparkles className="h-6 w-6" />
+          <div className="flex justify-center">
+            <ReBorrowLogo size={44} className="h-11 w-11 shadow-sm transition-transform hover:scale-105" />
           </div>
-          <h1 className="mt-4 text-2xl font-extrabold text-gray-900 tracking-tight">Create Account</h1>
+          <h1 className="mt-4 text-2xl font-black text-gray-900 tracking-tight">Create Account</h1>
           <p className="mt-1 text-xs text-gray-500">
             Join your local community borrowing network today.
           </p>

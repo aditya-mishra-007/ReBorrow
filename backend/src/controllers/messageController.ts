@@ -100,21 +100,39 @@ export const getMyConversations = async (req: AuthRequest, res: Response): Promi
     const conversations = await Conversation.find({ participants: req.user._id })
       .populate('participants', 'name email')
       .populate('asset', 'name images')
-      .sort({ lastMessageAt: -1 });
+      .sort({ lastMessageAt: -1 })
+      .lean();
 
-    // Compute an unread count per conversation — the number of
-    // messages in each thread not sent by the current user AND not
-    // yet in that message's readBy array.
-    const conversationsWithUnread = await Promise.all(
-      conversations.map(async (convo) => {
-        const unreadCount = await Message.countDocuments({
-          conversation: convo._id,
-          sender: { $ne: req.user!._id },
-          readBy: { $ne: req.user!._id },
-        });
-        return { ...convo.toObject(), unreadCount };
-      })
-    );
+    if (conversations.length === 0) {
+      res.status(200).json({ success: true, data: [] });
+      return;
+    }
+
+    // High performance batch unread count query in a single aggregation
+    const convoIds = conversations.map((c) => c._id);
+    const unreadAgg = await Message.aggregate([
+      {
+        $match: {
+          conversation: { $in: convoIds },
+          sender: { $ne: req.user._id },
+          readBy: { $ne: req.user._id },
+        },
+      },
+      {
+        $group: {
+          _id: '$conversation',
+          count: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const unreadMap = new Map<string, number>();
+    unreadAgg.forEach((u) => unreadMap.set(u._id.toString(), u.count));
+
+    const conversationsWithUnread = conversations.map((convo) => ({
+      ...convo,
+      unreadCount: unreadMap.get(convo._id.toString()) || 0,
+    }));
 
     res.status(200).json({ success: true, data: conversationsWithUnread });
   } catch (error) {
@@ -142,7 +160,7 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    const conversation = await Conversation.findById(id);
+    const conversation = await Conversation.findById(id).select('participants').lean();
     if (!conversation) {
       res.status(404).json({ success: false, message: 'Conversation not found' });
       return;
@@ -164,20 +182,20 @@ export const getMessages = async (req: AuthRequest, res: Response): Promise<void
       Message.countDocuments({ conversation: id }),
       Message.find({ conversation: id })
         .populate('sender', 'name email')
-        .sort({ createdAt: -1 }) // newest first for pagination...
+        .sort({ createdAt: -1 })
         .skip(skip)
-        .limit(limit),
+        .limit(limit)
+        .lean(),
     ]);
 
-    // ...then reverse to chronological order for display (oldest at
-    // top, newest at bottom) — matches a normal chat UI's reading order.
+    // Reverse to chronological order for display
     messages.reverse();
 
-    // Mark all messages not sent by this user as read.
-    await Message.updateMany(
+    // Mark as read in background without blocking response
+    Message.updateMany(
       { conversation: id, sender: { $ne: req.user._id }, readBy: { $ne: req.user._id } },
       { $addToSet: { readBy: req.user._id } }
-    );
+    ).catch((err) => console.error('Mark read error:', err));
 
     res.status(200).json({
       success: true,

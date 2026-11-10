@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useSocket } from '@/context/SocketContext';
 import * as messageApi from '@/api/messageApi';
+import ReBorrowLogo from '@/components/ReBorrowLogo';
 import {
   Menu,
   X,
@@ -14,7 +15,6 @@ import {
   ShieldCheck,
   LogOut,
   User as UserIcon,
-  Sparkles,
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -67,16 +67,14 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/90 backdrop-blur-md transition-all">
       <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
-        {/* --- Logo --- */}
+        {/* --- ReBorrow Brand Logo --- */}
         <Link
           to="/"
-          className="group flex items-center gap-2.5 text-xl font-bold tracking-tight text-gray-900 transition-colors"
+          className="group flex items-center gap-2.5 transition-transform active:scale-98"
           onClick={closeMobileMenu}
         >
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm transition-transform group-hover:scale-105">
-            <Sparkles className="h-5 w-5" />
-          </div>
-          <span className="bg-gradient-to-r from-gray-900 via-brand-900 to-brand-700 bg-clip-text text-transparent font-extrabold">
+          <ReBorrowLogo className="h-9 w-9 shadow-xs transition-transform duration-200 group-hover:scale-105" />
+          <span className="bg-gradient-to-r from-gray-950 via-brand-950 to-brand-700 bg-clip-text text-xl font-black tracking-tight text-transparent">
             ReBorrow
           </span>
         </Link>

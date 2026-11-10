@@ -5,7 +5,15 @@ import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { getErrorMessage } from '@/lib/api';
 import type { LoginPayload } from '@/types';
-import { Sparkles, ArrowRight, Lock, Mail } from 'lucide-react';
+import ReBorrowLogo from '@/components/ReBorrowLogo';
+import { ArrowRight, Lock, Mail, UserCheck } from 'lucide-react';
+
+const COMMUNITY_USERS = [
+  { label: 'Priya Sharma', email: 'priya.sharma@gmail.com' },
+  { label: 'Aarav Mehta', email: 'aarav.mehta@gmail.com' },
+  { label: 'Neha Verma', email: 'neha.verma@gmail.com' },
+  { label: 'Rohan Gupta', email: 'rohan.gupta@gmail.com' },
+];
 
 export default function LoginPage() {
   const { login, isAuthenticated } = useAuth();
@@ -41,38 +49,41 @@ export default function LoginPage() {
     }
   };
 
-  const fillDemoCredentials = () => {
-    setValue('email', 'priya@demo.com');
-    setValue('password', 'Demo1234!');
+  const selectUser = (email: string) => {
+    setValue('email', email);
+    setValue('password', 'Password123!');
   };
 
   return (
     <div className="mx-auto max-w-md py-6 sm:py-10">
       <div className="overflow-hidden rounded-3xl border border-gray-200/90 bg-white p-8 shadow-xl sm:p-10">
         <div className="text-center">
-          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-sm">
-            <Sparkles className="h-6 w-6" />
+          <div className="flex justify-center">
+            <ReBorrowLogo size={44} className="h-11 w-11 shadow-sm transition-transform hover:scale-105" />
           </div>
-          <h1 className="mt-4 text-2xl font-extrabold text-gray-900 tracking-tight">Welcome Back</h1>
+          <h1 className="mt-4 text-2xl font-black text-gray-900 tracking-tight">Sign In to ReBorrow</h1>
           <p className="mt-1 text-xs text-gray-500">
-            Sign in to access community items, borrow requests, and chats.
+            Access community items, borrow requests, and real-time neighborhood chats.
           </p>
         </div>
 
-        {/* Demo Account Quick-Fill Card */}
-        <div className="mt-6 rounded-2xl border border-brand-100 bg-brand-50/60 p-3.5 text-xs">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="font-bold text-brand-900">Demo User Available</p>
-              <p className="text-brand-700/80 text-[11px]">priya@demo.com / Demo1234!</p>
-            </div>
-            <button
-              type="button"
-              onClick={fillDemoCredentials}
-              className="rounded-lg bg-brand-600 px-3 py-1.5 text-[11px] font-bold text-white shadow-xs hover:bg-brand-700 active:scale-95 transition-all"
-            >
-              Fill Demo
-            </button>
+        {/* Community Members Quick Selector */}
+        <div className="mt-6 rounded-2xl border border-brand-100 bg-brand-50/50 p-3.5 text-xs space-y-2">
+          <div className="flex items-center gap-1.5 text-brand-900 font-bold">
+            <UserCheck className="h-3.5 w-3.5 text-brand-600" />
+            <span>Select Community Account:</span>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            {COMMUNITY_USERS.map((u) => (
+              <button
+                key={u.email}
+                type="button"
+                onClick={() => selectUser(u.email)}
+                className="truncate rounded-xl border border-brand-200 bg-white px-2.5 py-1.5 text-left text-[11px] font-semibold text-brand-900 shadow-2xs hover:bg-brand-50 hover:border-brand-300 transition-colors"
+              >
+                {u.label}
+              </button>
+            ))}
           </div>
         </div>
 

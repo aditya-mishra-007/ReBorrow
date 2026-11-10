@@ -15,6 +15,9 @@ import {
 } from 'lucide-react';
 import type { ChatMessage, Conversation, NewMessageSocketPayload } from '@/types';
 
+// In-memory cache for ultra-fast instant conversation switching
+const conversationMessagesCache = new Map<string, ChatMessage[]>();
+
 export default function MessagesPage() {
   const { user } = useAuth();
   const { socket, isConnected } = useSocket();
@@ -24,15 +27,15 @@ export default function MessagesPage() {
   const [isLoadingConvos, setIsLoadingConvos] = useState(true);
   const activeConversationId = searchParams.get('conversation');
 
-  const fetchConversations = useCallback(async () => {
-    setIsLoadingConvos(true);
+  const fetchConversations = useCallback(async (silent = false) => {
+    if (!silent) setIsLoadingConvos(true);
     try {
       const { data } = await messageApi.getMyConversations();
       setConversations(data);
     } catch (error) {
-      toast.error(getErrorMessage(error));
+      if (!silent) toast.error(getErrorMessage(error));
     } finally {
-      setIsLoadingConvos(false);
+      if (!silent) setIsLoadingConvos(false);
     }
   }, []);
 
@@ -40,19 +43,49 @@ export default function MessagesPage() {
     fetchConversations();
   }, [fetchConversations]);
 
-  // Refresh conversation list preview on socket new_message
+  // Handle new incoming messages live without heavy full REST refetch
   useEffect(() => {
     if (!socket) return;
 
-    const handleNewMessage = () => {
-      fetchConversations();
+    const handleNewMessage = (payload: NewMessageSocketPayload) => {
+      // Update cached messages for this conversation if open in memory
+      const cached = conversationMessagesCache.get(payload.conversationId);
+      if (cached && !cached.some((m) => m._id === payload.message._id)) {
+        conversationMessagesCache.set(payload.conversationId, [...cached, payload.message]);
+      }
+
+      // Update conversations list in-place immediately
+      setConversations((prev) => {
+        const index = prev.findIndex((c) => c._id === payload.conversationId);
+        if (index === -1) {
+          fetchConversations(true);
+          return prev;
+        }
+        const target = prev[index];
+        if (!target) return prev;
+        const remaining = prev.filter((_, i) => i !== index);
+        const updatedItem: Conversation = {
+          _id: target._id,
+          participants: target.participants,
+          asset: target.asset,
+          createdAt: target.createdAt,
+          updatedAt: target.updatedAt,
+          lastMessageText: payload.message.text,
+          lastMessageAt: payload.message.createdAt,
+          unreadCount:
+            payload.conversationId !== activeConversationId
+              ? (target.unreadCount || 0) + 1
+              : 0,
+        };
+        return [updatedItem, ...remaining];
+      });
     };
 
     socket.on('new_message', handleNewMessage);
     return () => {
       socket.off('new_message', handleNewMessage);
     };
-  }, [socket, fetchConversations]);
+  }, [socket, activeConversationId, fetchConversations]);
 
   const selectConversation = (id: string) => {
     setSearchParams({ conversation: id });
@@ -227,8 +260,10 @@ function ConversationThread({
 }) {
   const { user } = useAuth();
   const { socket } = useSocket();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    () => conversationMessagesCache.get(conversationId) || []
+  );
+  const [isLoading, setIsLoading] = useState(!conversationMessagesCache.has(conversationId));
   const [messageText, setMessageText] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isOtherUserTyping, setIsOtherUserTyping] = useState(false);
@@ -238,12 +273,12 @@ function ConversationThread({
 
   const otherUser = conversation?.participants.find((p) => p._id !== user?._id);
 
-  // 1. Fetch message history
+  // 1. Fetch message history with instant cache-first display
   const fetchMessages = useCallback(async () => {
-    setIsLoading(true);
     try {
       const { data } = await messageApi.getMessages(conversationId, { limit: 100 });
       setMessages(data);
+      conversationMessagesCache.set(conversationId, data);
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -252,8 +287,15 @@ function ConversationThread({
   }, [conversationId]);
 
   useEffect(() => {
+    const cached = conversationMessagesCache.get(conversationId);
+    if (cached && cached.length > 0) {
+      setMessages(cached);
+      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+    }
     fetchMessages();
-  }, [fetchMessages]);
+  }, [conversationId, fetchMessages]);
 
   // 2. Scroll to bottom on updates
   useEffect(() => {
@@ -358,13 +400,19 @@ function ConversationThread({
       const { data } = await messageApi.sendMessage(conversationId, trimmed);
 
       // 3. Swap temp id with server message
-      setMessages((prev) =>
-        prev.map((m) => (m._id === tempId ? data : m))
-      );
+      setMessages((prev) => {
+        const next = prev.map((m) => (m._id === tempId ? data : m));
+        conversationMessagesCache.set(conversationId, next);
+        return next;
+      });
       onMessageSent();
     } catch (error) {
       // Rollback on failure
-      setMessages((prev) => prev.filter((m) => m._id !== tempId));
+      setMessages((prev) => {
+        const next = prev.filter((m) => m._id !== tempId);
+        conversationMessagesCache.set(conversationId, next);
+        return next;
+      });
       setMessageText(trimmed);
       toast.error('Failed to deliver message. Check your connection.');
     } finally {

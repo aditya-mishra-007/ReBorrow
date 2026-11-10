@@ -1,6 +1,7 @@
 import { Outlet, Link } from 'react-router-dom';
 import Navbar from '@/components/Navbar';
-import { Sparkles, Shield, HeartHandshake, Zap } from 'lucide-react';
+import ReBorrowLogo from '@/components/ReBorrowLogo';
+import { Shield, HeartHandshake, Zap } from 'lucide-react';
 
 export default function Layout() {
   return (
@@ -22,11 +23,9 @@ function Footer() {
       <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
         <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
           <div className="space-y-3 md:col-span-1">
-            <div className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-600 text-white">
-                <Sparkles className="h-4 w-4" />
-              </div>
-              <span className="text-lg font-bold tracking-tight text-gray-900">ReBorrow</span>
+            <div className="flex items-center gap-2.5">
+              <ReBorrowLogo className="h-8 w-8" />
+              <span className="text-lg font-black tracking-tight text-gray-900">ReBorrow</span>
             </div>
             <p className="text-xs leading-relaxed text-gray-500">
               A peer-to-peer neighborhood sharing network. Borrow high-end gear, tools, and essentials affordably from trusted locals.
