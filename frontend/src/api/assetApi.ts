@@ -112,6 +112,12 @@ export async function createAsset(
   if (payload.city) formData.append('city', payload.city);
   if (payload.latitude !== undefined) formData.append('latitude', String(payload.latitude));
   if (payload.longitude !== undefined) formData.append('longitude', String(payload.longitude));
+  if (payload.condition) formData.append('condition', payload.condition);
+  if (payload.brand) formData.append('brand', payload.brand);
+  if (payload.borrowingCostPerDay !== undefined) formData.append('borrowingCostPerDay', String(payload.borrowingCostPerDay));
+  if (payload.securityDeposit !== undefined) formData.append('securityDeposit', String(payload.securityDeposit));
+  if (payload.pickupInstructions) formData.append('pickupInstructions', payload.pickupInstructions);
+  if (payload.restrictions) formData.append('restrictions', payload.restrictions);
 
   if (images && images.length > 0) {
     images.forEach((file) => formData.append('images', file));

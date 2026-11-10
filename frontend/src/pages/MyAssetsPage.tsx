@@ -1,4 +1,4 @@
-import { ImageOff, X } from 'lucide-react';
+import { ImageOff, Plus, Trash2, MapPin, Eye } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -7,22 +7,16 @@ import { getErrorMessage } from '@/lib/api';
 import { useAuth } from '@/context/AuthContext';
 import type { Asset, AssetStatus } from '@/types';
 
-/**
- * MyAssetsPage.tsx
- * ------------------------------------------------------------------
- * Private route: /my-assets (guarded by ProtectedRoute)
- *
- * Lists all assets owned by the current user, with inline edit and
- * delete actions. Uses the backend's `owner=me` query param
- * (assetController.ts's getAssets) to fetch only the current user's
- * assets directly from the server, rather than fetching the entire
- * public asset list and filtering client-side.
- */
+const statusStyles: Record<AssetStatus, { badge: string; label: string }> = {
+  available: { badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'Available' },
+  requested: { badge: 'bg-amber-50 text-amber-700 border-amber-200', label: 'Requested' },
+  borrowed: { badge: 'bg-gray-100 text-gray-700 border-gray-200', label: 'Borrowed' },
+};
+
 export default function MyAssetsPage() {
   const { user } = useAuth();
   const [assets, setAssets] = useState<Asset[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const fetchMyAssets = useCallback(async () => {
@@ -43,7 +37,7 @@ export default function MyAssetsPage() {
   }, [fetchMyAssets]);
 
   const handleDelete = async (assetId: string) => {
-    if (!window.confirm('Delete this listing? This cannot be undone.')) {
+    if (!window.confirm('Are you sure you want to delete this listing? This cannot be undone.')) {
       return;
     }
 
@@ -53,241 +47,143 @@ export default function MyAssetsPage() {
       toast.success('Listing deleted');
       setAssets((prev) => prev.filter((a) => a._id !== assetId));
     } catch (error) {
-      // Surfaces the backend's 409 message if an active/pending borrow
-      // request blocks deletion (see deleteAsset in assetController.ts)
       toast.error(getErrorMessage(error));
     } finally {
       setDeletingId(null);
     }
   };
 
-  const statusStyles: Record<AssetStatus, string> = {
-    available: 'bg-green-100 text-green-800',
-    requested: 'bg-yellow-100 text-yellow-800',
-    borrowed: 'bg-gray-200 text-gray-700',
-  };
-
   return (
-    <div>
-      <div className="mb-6 flex items-center justify-between">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-gray-100 pb-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">My Assets</h1>
-          <p className="mt-1 text-gray-500">Manage the items you've listed for lending.</p>
+          <h1 className="text-2xl font-extrabold text-gray-900">My Listed Assets</h1>
+          <p className="mt-1 text-xs text-gray-500">
+            Manage your items available for borrowing, edit details, or remove listings.
+          </p>
         </div>
+
         <Link
           to="/assets/new"
-          className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+          className="inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-brand-700 transition-colors"
         >
-          + List an Item
+          <Plus className="h-4 w-4" />
+          <span>List New Item</span>
         </Link>
       </div>
 
       {isLoading ? (
         <div className="flex justify-center py-16">
-          <div
-            className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600"
-            role="status"
-            aria-label="Loading"
-          />
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
         </div>
       ) : assets.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-300 py-16 text-center">
-          <p className="mb-3 text-gray-500">You haven't listed any items yet.</p>
-          <Link to="/assets/new" className="text-sm font-medium text-brand-600 hover:text-brand-700">
-            List your first item →
+        <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-12 text-center shadow-sm">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+            <Plus className="h-6 w-6" />
+          </div>
+          <h3 className="mt-4 text-base font-semibold text-gray-900">No items listed yet</h3>
+          <p className="mt-1 text-xs text-gray-500 max-w-sm mx-auto">
+            You haven't added any items to lend out. Share tools, equipment, or cameras with your community!
+          </p>
+          <Link
+            to="/assets/new"
+            className="mt-6 inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-brand-700"
+          >
+            List your first item
           </Link>
         </div>
       ) : (
-        <div className="space-y-4">
-          {assets.map((asset) => (
-            <div
-              key={asset._id}
-              className="flex flex-col gap-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between"
-            >
-              <div className="flex min-w-0 flex-1 items-center gap-4">
-                <div className="h-16 w-16 shrink-0 overflow-hidden rounded-md bg-gray-100">
-                  {asset.images[0] ? (
-                    <img src={asset.images[0]} alt={asset.name} className="h-full w-full object-cover" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {assets.map((asset) => {
+            const isDeleting = deletingId === asset._id;
+            const statusConfig = statusStyles[asset.status];
+            const cost = asset.borrowingCostPerDay ?? 0;
+
+            return (
+              <div
+                key={asset._id}
+                className="flex flex-col overflow-hidden rounded-2xl border border-gray-200/80 bg-white shadow-xs transition-all hover:border-gray-300 hover:shadow-sm"
+              >
+                <div className="relative aspect-[16/10] w-full bg-gray-100 overflow-hidden">
+                  {asset.images?.[0] ? (
+                    <img
+                      src={asset.images[0]}
+                      alt={asset.name}
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                      <ImageOff className="h-5 w-5 text-gray-300" />
+                    <div className="flex h-full w-full items-center justify-center text-gray-300">
+                      <ImageOff className="h-8 w-8" />
                     </div>
                   )}
+
+                  <div className="absolute left-2.5 top-2.5 flex gap-1.5">
+                    <span
+                      className={`rounded-md border px-2 py-0.5 text-[10px] font-bold backdrop-blur-xs ${
+                        statusConfig?.badge
+                      }`}
+                    >
+                      {statusConfig?.label}
+                    </span>
+                    {asset.condition && (
+                      <span className="rounded-md border border-gray-200 bg-white/90 px-2 py-0.5 text-[10px] font-bold text-gray-700 backdrop-blur-xs">
+                        {asset.condition}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <Link
-                    to={`/assets/${asset._id}`}
-                    className="truncate font-semibold text-gray-900 hover:text-brand-600"
-                  >
-                    {asset.name}
-                  </Link>
-                  <span
-                    className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusStyles[asset.status]}`}
-                  >
-                    {asset.status}
-                  </span>
-                </div>
-                <p className="mt-1 line-clamp-1 text-sm text-gray-500">{asset.description}</p>
+
+                <div className="flex flex-1 flex-col p-4">
+                  <div className="flex items-center justify-between text-xs text-gray-400">
+                    <span>{asset.category}</span>
+                    {asset.location?.city && (
+                      <span className="flex items-center gap-0.5">
+                        <MapPin className="h-3 w-3" />
+                        {asset.location.city}
+                      </span>
+                    )}
+                  </div>
+
+                  <h3 className="mt-1 line-clamp-1 text-sm font-bold text-gray-900">{asset.name}</h3>
+                  <p className="mt-1 line-clamp-2 text-xs text-gray-500 flex-1">{asset.description}</p>
+
+                  <div className="mt-3 flex items-baseline justify-between border-t border-gray-50 pt-2.5">
+                    <div>
+                      {cost > 0 ? (
+                        <span className="text-sm font-extrabold text-gray-900">₹{cost}/day</span>
+                      ) : (
+                        <span className="text-xs font-bold text-emerald-600">Free to borrow</span>
+                      )}
+                    </div>
+                    {asset.securityDeposit ? (
+                      <span className="text-[10px] text-gray-400">Deposit: ₹{asset.securityDeposit}</span>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between gap-2 border-t border-gray-100 pt-3">
+                    <Link
+                      to={`/assets/${asset._id}`}
+                      className="inline-flex items-center gap-1 text-xs font-semibold text-brand-600 hover:text-brand-800"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      View Public Page
+                    </Link>
+
+                    <button
+                      onClick={() => handleDelete(asset._id)}
+                      disabled={isDeleting}
+                      title="Delete listing"
+                      className="rounded-lg p-1.5 text-gray-400 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 transition-colors"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
-
-              <div className="flex shrink-0 gap-2">
-                <button
-                  onClick={() => setEditingId(asset._id)}
-                  className="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200"
-                >
-                  Edit
-                </button>
-                <button
-                  onClick={() => handleDelete(asset._id)}
-                  disabled={deletingId === asset._id}
-                  className="rounded-md bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {deletingId === asset._id ? 'Deleting...' : 'Delete'}
-                </button>
-              </div>
-
-              {editingId === asset._id && (
-                <EditAssetForm
-                  asset={asset}
-                  onClose={() => setEditingId(null)}
-                  onSaved={(updated) => {
-                    setAssets((prev) =>
-                      prev.map((a) => (a._id === updated._id ? updated : a))
-                    );
-                    setEditingId(null);
-                  }}
-                />
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
-    </div>
-  );
-}
-
-/**
- * EditAssetForm
- * ------------------------------------------------------------------
- * Inline edit form rendered below an asset row when its "Edit" button
- * is clicked. Kept simple (uncontrolled-ish via local state, not
- * react-hook-form) since it's a small, self-contained 3-field form —
- * pulling in the full react-hook-form machinery here would be
- * disproportionate for something this contained.
- */
-function EditAssetForm({
-  asset,
-  onClose,
-  onSaved,
-}: {
-  asset: Asset;
-  onClose: () => void;
-  onSaved: (updated: Asset) => void;
-}) {
-  const [name, setName] = useState(asset.name);
-  const [category, setCategory] = useState(asset.category);
-  const [description, setDescription] = useState(asset.description);
-  const [images, setImages] = useState(asset.images);
-  const [isSaving, setIsSaving] = useState(false);
-  const [removingImage, setRemovingImage] = useState<string | null>(null);
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    try {
-      const { data } = await assetApi.updateAsset(asset._id, { name, category, description });
-      toast.success('Listing updated');
-      onSaved({ ...data, images });
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const handleRemoveImage = async (imageUrl: string) => {
-    if (!window.confirm('Remove this image?')) return;
-
-    setRemovingImage(imageUrl);
-    try {
-      const { data } = await assetApi.deleteAssetImage(asset._id, imageUrl);
-      toast.success('Image removed');
-      setImages(data.images);
-    } catch (error) {
-      toast.error(getErrorMessage(error));
-    } finally {
-      setRemovingImage(null);
-    }
-  };
-
-  return (
-    <div className="w-full basis-full rounded-md border border-gray-200 bg-gray-50 p-4">
-      <div className="space-y-3">
-        <div>
-          <label className="block text-xs font-medium text-gray-600">Name</label>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600">Category</label>
-          <input
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="mt-1 w-full rounded-md border border-gray-300 px-3 py-1.5 text-sm"
-          />
-        </div>
-        <div>
-          <label className="block text-xs font-medium text-gray-600">Description</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={3}
-            className="mt-1 w-full resize-none rounded-md border border-gray-300 px-3 py-1.5 text-sm"
-          />
-        </div>
-
-        {images.length > 0 && (
-          <div>
-            <label className="block text-xs font-medium text-gray-600">Photos</label>
-            <div className="mt-1 flex flex-wrap gap-2">
-              {images.map((url) => (
-                <div key={url} className="group relative h-16 w-16 overflow-hidden rounded-md border border-gray-200">
-                  <img src={url} alt="" className="h-full w-full object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveImage(url)}
-                    disabled={removingImage === url}
-                    className="absolute right-1 top-1 rounded-full bg-black/60 p-0.5 text-white opacity-0 transition-opacity group-hover:opacity-100 disabled:opacity-100"
-                    aria-label="Remove image"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <div className="flex gap-2">
-          <button
-            onClick={handleSave}
-            disabled={isSaving}
-            className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-60"
-          >
-            {isSaving ? 'Saving...' : 'Save Changes'}
-          </button>
-          <button
-            onClick={onClose}
-            className="rounded-md bg-gray-200 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-300"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
     </div>
   );
 }

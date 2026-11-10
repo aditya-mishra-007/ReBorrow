@@ -5,17 +5,8 @@ import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
 import { getErrorMessage } from '@/lib/api';
 import type { LoginPayload } from '@/types';
+import { Sparkles, ArrowRight, Lock, Mail } from 'lucide-react';
 
-/**
- * LoginPage.tsx
- * ------------------------------------------------------------------
- * Public route: /login
- *
- * Handles user authentication via email/password. On success,
- * redirects back to whichever route the user originally attempted to
- * reach (if they were bounced here by ProtectedRoute), falling back
- * to the home page otherwise.
- */
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -25,13 +16,10 @@ export default function LoginPage() {
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<LoginPayload>();
 
-  // Read the location ProtectedRoute stashed before redirecting here
-  // (see ProtectedRoute.tsx's `state={{ from: location }}`). Falls
-  // back to '/' if the user navigated to /login directly rather than
-  // being redirected (e.g., typed the URL, clicked "Login" in Navbar).
   const from = (location.state as { from?: Location })?.from?.pathname || '/';
 
   const onSubmit = async (data: LoginPayload) => {
@@ -47,70 +35,106 @@ export default function LoginPage() {
     }
   };
 
-  return (
-    <div className="mx-auto max-w-md">
-      <div className="rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
-        <h1 className="text-2xl font-bold text-gray-900">Welcome back</h1>
-        <p className="mt-1 text-sm text-gray-500">Log in to your ReBorrow account.</p>
+  const fillDemoCredentials = () => {
+    setValue('email', 'priya@demo.com');
+    setValue('password', 'Demo1234!');
+  };
 
-        <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-5" noValidate>
-          {/* --- Email field --- */}
+  return (
+    <div className="mx-auto max-w-md py-6 sm:py-10">
+      <div className="overflow-hidden rounded-3xl border border-gray-200/90 bg-white p-8 shadow-xl sm:p-10">
+        <div className="text-center">
+          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-sm">
+            <Sparkles className="h-6 w-6" />
+          </div>
+          <h1 className="mt-4 text-2xl font-extrabold text-gray-900 tracking-tight">Welcome Back</h1>
+          <p className="mt-1 text-xs text-gray-500">
+            Sign in to access community items, borrow requests, and chats.
+          </p>
+        </div>
+
+        {/* Demo Account Quick-Fill Card */}
+        <div className="mt-6 rounded-2xl border border-brand-100 bg-brand-50/60 p-3.5 text-xs">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="font-bold text-brand-900">Demo User Available</p>
+              <p className="text-brand-700/80 text-[11px]">priya@demo.com / Demo1234!</p>
+            </div>
+            <button
+              type="button"
+              onClick={fillDemoCredentials}
+              className="rounded-lg bg-brand-600 px-3 py-1.5 text-[11px] font-bold text-white shadow-xs hover:bg-brand-700 active:scale-95 transition-all"
+            >
+              Fill Demo
+            </button>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit(onSubmit)} className="mt-6 space-y-4" noValidate>
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
-              Email
+            <label htmlFor="email" className="block text-xs font-semibold text-gray-700">
+              Email Address
             </label>
-            <input
-              id="email"
-              type="email"
-              autoComplete="email"
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus-visible:border-brand-500"
-              {...register('email', {
-                required: 'Email is required',
-                pattern: {
-                  value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
-                  message: 'Enter a valid email address',
-                },
-              })}
-            />
+            <div className="relative mt-1">
+              <Mail className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                id="email"
+                type="email"
+                autoComplete="email"
+                placeholder="you@example.com"
+                className="w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-3.5 text-xs font-medium text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                {...register('email', {
+                  required: 'Email is required',
+                  pattern: {
+                    value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                    message: 'Please enter a valid email address',
+                  },
+                })}
+              />
+            </div>
             {errors.email && (
-              <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>
+              <p className="mt-1 text-[11px] text-red-600">{errors.email.message}</p>
             )}
           </div>
 
-          {/* --- Password field --- */}
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+            <label htmlFor="password" className="block text-xs font-semibold text-gray-700">
               Password
             </label>
-            <input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus-visible:border-brand-500"
-              {...register('password', {
-                required: 'Password is required',
-              })}
-            />
+            <div className="relative mt-1">
+              <Lock className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                placeholder="••••••••"
+                className="w-full rounded-xl border border-gray-300 py-2.5 pl-10 pr-3.5 text-xs font-medium text-gray-900 placeholder-gray-400 focus:border-brand-500 focus:outline-none focus:ring-1 focus:ring-brand-500"
+                {...register('password', {
+                  required: 'Password is required',
+                })}
+              />
+            </div>
             {errors.password && (
-              <p className="mt-1 text-sm text-red-600">{errors.password.message}</p>
+              <p className="mt-1 text-[11px] text-red-600">{errors.password.message}</p>
             )}
           </div>
 
           <button
             type="submit"
             disabled={isSubmitting}
-            className="w-full rounded-md bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 py-3 text-xs font-bold text-white shadow-md transition-all hover:bg-brand-700 active:scale-98 disabled:opacity-50"
           >
-            {isSubmitting ? 'Logging in...' : 'Log In'}
+            <span>{isSubmitting ? 'Signing in...' : 'Sign In'}</span>
+            <ArrowRight className="h-4 w-4" />
           </button>
         </form>
 
-        <p className="mt-6 text-center text-sm text-gray-500">
-          Don't have an account?{' '}
-          <Link to="/register" className="font-medium text-brand-600 hover:text-brand-700">
-            Sign up
+        <div className="mt-6 border-t border-gray-100 pt-5 text-center text-xs text-gray-500">
+          <span>Don't have an account? </span>
+          <Link to="/register" className="font-bold text-brand-600 hover:text-brand-800">
+            Sign up now
           </Link>
-        </p>
+        </div>
       </div>
     </div>
   );

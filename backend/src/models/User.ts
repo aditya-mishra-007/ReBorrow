@@ -17,6 +17,7 @@ export interface IUser extends Document {
   email: string;
   password: string;
   role: 'user' | 'admin';
+  rating?: number; // average rating as a lender/borrower, 0–5
   createdAt: Date;
   updatedAt: Date;
   matchPassword(enteredPassword: string): Promise<boolean>;
@@ -63,6 +64,13 @@ const UserSchema: Schema<IUser> = new Schema(
         message: '{VALUE} is not a supported role',
       },
       default: 'user',
+    },
+    // Aggregate rating (0–5) updated when borrow cycles complete.
+    // Stored denormalized here for fast profile rendering.
+    rating: {
+      type: Number,
+      min: [0, 'Rating cannot be less than 0'],
+      max: [5, 'Rating cannot exceed 5'],
     },
   },
   {

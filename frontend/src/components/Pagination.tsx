@@ -1,15 +1,4 @@
-/**
- * Pagination.tsx
- * ------------------------------------------------------------------
- * Reusable page-number control. Shows Previous/Next buttons plus a
- * condensed set of page numbers (with ellipses for large page counts)
- * so it stays usable even with many pages, without rendering 50+
- * buttons in a row.
- *
- * Purely presentational — owns no state itself. The parent page
- * supplies `currentPage`/`totalPages` and receives a callback when
- * the user picks a different page.
- */
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface PaginationProps {
   currentPage: number;
@@ -18,24 +7,13 @@ interface PaginationProps {
 }
 
 export default function Pagination({ currentPage, totalPages, onPageChange }: PaginationProps) {
-  // Nothing to paginate — render nothing rather than a single useless
-  // "Page 1 of 1" control.
   if (totalPages <= 1) {
     return null;
   }
 
-  /**
-   * getPageNumbers
-   * ------------------------------------------------------------------
-   * Builds a condensed list of page numbers to display, always
-   * including the first page, last page, current page, and one
-   * neighbor on each side of the current page — with `'...'` markers
-   * standing in for any gaps. This keeps the control from rendering
-   * an unwieldy 40+ buttons when totalPages is large.
-   */
   const getPageNumbers = (): (number | '...')[] => {
     const pages: (number | '...')[] = [];
-    const delta = 1; // how many neighbors around currentPage to show
+    const delta = 1;
 
     for (let i = 1; i <= totalPages; i++) {
       const isFirst = i === 1;
@@ -55,31 +33,34 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
   const pageNumbers = getPageNumbers();
 
   return (
-    <nav className="mt-8 flex items-center justify-center gap-1" aria-label="Pagination">
+    <nav className="mt-8 flex items-center justify-center gap-1.5" aria-label="Pagination">
       <button
         onClick={() => onPageChange(currentPage - 1)}
-        disabled={currentPage === 1}
-        className="rounded-md px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+        disabled={currentPage <= 1}
+        className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 shadow-xs hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
         aria-label="Previous page"
       >
-        ← Prev
+        <ChevronLeft className="h-4 w-4" />
       </button>
 
-      {pageNumbers.map((page, idx) =>
+      {pageNumbers.map((page, index) =>
         page === '...' ? (
-          <span key={`ellipsis-${idx}`} className="px-2 text-sm text-gray-400">
+          <span
+            key={`ellipsis-${index}`}
+            className="flex h-9 w-9 items-center justify-center text-xs font-semibold text-gray-400 select-none"
+          >
             …
           </span>
         ) : (
           <button
             key={page}
             onClick={() => onPageChange(page)}
-            aria-current={page === currentPage ? 'page' : undefined}
-            className={`min-w-[2.25rem] rounded-md px-3 py-2 text-sm font-medium transition-colors ${
-              page === currentPage
-                ? 'bg-brand-600 text-white'
-                : 'text-gray-700 hover:bg-gray-100'
+            className={`flex h-9 w-9 items-center justify-center rounded-xl text-xs font-bold transition-all ${
+              currentPage === page
+                ? 'bg-brand-600 text-white shadow-sm ring-2 ring-brand-600/20'
+                : 'border border-gray-200 bg-white text-gray-700 shadow-xs hover:bg-gray-50'
             }`}
+            aria-current={currentPage === page ? 'page' : undefined}
           >
             {page}
           </button>
@@ -88,11 +69,11 @@ export default function Pagination({ currentPage, totalPages, onPageChange }: Pa
 
       <button
         onClick={() => onPageChange(currentPage + 1)}
-        disabled={currentPage === totalPages}
-        className="rounded-md px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-40"
+        disabled={currentPage >= totalPages}
+        className="flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 bg-white text-gray-600 shadow-xs hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
         aria-label="Next page"
       >
-        Next →
+        <ChevronRight className="h-4 w-4" />
       </button>
     </nav>
   );

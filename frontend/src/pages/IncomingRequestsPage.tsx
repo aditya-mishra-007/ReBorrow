@@ -9,24 +9,37 @@ import {
   type BorrowRequest,
   type BorrowRequestStatus,
 } from '@/types';
+import {
+  Calendar,
+  Inbox,
+  ImageOff,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  User,
+  Check,
+  X,
+} from 'lucide-react';
 
-/**
- * IncomingRequestsPage.tsx
- * ------------------------------------------------------------------
- * Private route: /incoming-requests (guarded by ProtectedRoute)
- *
- * Lists all borrow requests made ON the current user's own assets
- * (as owner), with Approve/Reject actions for any 'pending' request.
- * This is where the core approve/reject business logic (asset status
- * cascade to 'borrowed' or back to 'available') gets triggered from
- * the UI — the backend does all the actual state-transition work,
- * this page just calls the two mutation endpoints and refreshes.
- */
-
-const statusStyles: Record<BorrowRequestStatus, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  approved: 'bg-green-100 text-green-800',
-  rejected: 'bg-red-100 text-red-800',
+const statusStyles: Record<
+  BorrowRequestStatus,
+  { badge: string; label: string; icon: typeof Clock }
+> = {
+  pending: {
+    badge: 'bg-amber-50 text-amber-700 border-amber-200',
+    label: 'Needs Your Review',
+    icon: Clock,
+  },
+  approved: {
+    badge: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    label: 'Approved',
+    icon: CheckCircle2,
+  },
+  rejected: {
+    badge: 'bg-red-50 text-red-700 border-red-200',
+    label: 'Declined',
+    icon: XCircle,
+  },
 };
 
 function formatDate(dateStr: string): string {
@@ -40,8 +53,6 @@ function formatDate(dateStr: string): string {
 export default function IncomingRequestsPage() {
   const [requests, setRequests] = useState<BorrowRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  // Tracks which specific request is mid-mutation (approve or reject)
-  // so we can disable only that row's buttons, not the whole page.
   const [actioningId, setActioningId] = useState<string | null>(null);
 
   const fetchRequests = useCallback(async () => {
@@ -64,7 +75,7 @@ export default function IncomingRequestsPage() {
     setActioningId(requestId);
     try {
       const { data: updated } = await borrowRequestApi.approveBorrowRequest(requestId);
-      toast.success('Request approved');
+      toast.success('Request approved! Item marked as borrowed.');
       setRequests((prev) => prev.map((r) => (r._id === updated._id ? updated : r)));
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -77,7 +88,7 @@ export default function IncomingRequestsPage() {
     setActioningId(requestId);
     try {
       const { data: updated } = await borrowRequestApi.rejectBorrowRequest(requestId);
-      toast.success('Request rejected');
+      toast.success('Request declined.');
       setRequests((prev) => prev.map((r) => (r._id === updated._id ? updated : r)));
     } catch (error) {
       toast.error(getErrorMessage(error));
@@ -89,91 +100,143 @@ export default function IncomingRequestsPage() {
   const pendingCount = requests.filter((r) => r.status === 'pending').length;
 
   return (
-    <div>
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900">Incoming Requests</h1>
-        <p className="mt-1 text-gray-500">
-          Review and respond to requests on your listed items.
-          {pendingCount > 0 && (
-            <span className="ml-2 rounded-full bg-yellow-100 px-2.5 py-0.5 text-xs font-medium text-yellow-800">
-              {pendingCount} pending
-            </span>
-          )}
-        </p>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-1 border-b border-gray-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-extrabold text-gray-900">Incoming Requests</h1>
+          <p className="mt-1 text-xs text-gray-500">
+            Neighbors requesting to borrow your equipment and items.
+          </p>
+        </div>
+
+        {pendingCount > 0 && (
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 border border-amber-200 px-3 py-1 text-xs font-bold text-amber-800">
+            <Clock className="h-3.5 w-3.5 text-amber-600" />
+            {pendingCount} Pending Approval
+          </span>
+        )}
       </div>
 
       {isLoading ? (
         <div className="flex justify-center py-16">
-          <div
-            className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600"
-            role="status"
-            aria-label="Loading"
-          />
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
         </div>
       ) : requests.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-gray-300 py-16 text-center">
-          <p className="text-gray-500">No one has requested to borrow your items yet.</p>
+        <div className="rounded-2xl border border-dashed border-gray-300 bg-white p-12 text-center shadow-sm">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+            <Inbox className="h-6 w-6" />
+          </div>
+          <h3 className="mt-4 text-base font-semibold text-gray-900">No incoming requests yet</h3>
+          <p className="mt-1 text-xs text-gray-500 max-w-sm mx-auto">
+            When other users want to borrow items you've listed, their requests will appear here for your approval.
+          </p>
+          <Link
+            to="/assets/new"
+            className="mt-6 inline-flex items-center gap-1.5 rounded-xl bg-brand-600 px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-brand-700"
+          >
+            List Another Item
+          </Link>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div className="space-y-3">
           {requests.map((request) => {
             const asset = isPopulatedAsset(request.asset) ? request.asset : null;
             const requester = isPopulatedOwner(request.requester) ? request.requester : null;
             const isActioning = actioningId === request._id;
+            const statusConfig = statusStyles[request.status];
+            const StatusIcon = statusConfig?.icon || Clock;
 
             return (
               <div
                 key={request._id}
-                className="flex flex-col gap-4 rounded-lg border border-gray-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-4 rounded-2xl border border-gray-200/80 bg-white p-5 shadow-xs transition-all hover:border-gray-300 sm:flex-row sm:items-center sm:justify-between"
               >
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {asset ? (
-                      <Link
-                        to={`/assets/${asset._id}`}
-                        className="truncate font-semibold text-gray-900 hover:text-brand-600"
-                      >
-                        {asset.name}
-                      </Link>
+                <div className="flex items-center gap-4 min-w-0">
+                  <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-gray-100 border border-gray-100">
+                    {asset?.images?.[0] ? (
+                      <img
+                        src={asset.images[0]}
+                        alt={asset.name}
+                        className="h-full w-full object-cover"
+                      />
                     ) : (
-                      <span className="font-semibold text-gray-500">(Item unavailable)</span>
+                      <div className="flex h-full w-full items-center justify-center text-gray-300">
+                        <ImageOff className="h-6 w-6" />
+                      </div>
                     )}
-                    <span
-                      className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${statusStyles[request.status]}`}
-                    >
-                      {request.status}
-                    </span>
                   </div>
 
-                  <p className="mt-1 text-sm text-gray-600">
-                    Requested by{' '}
-                    <span className="font-medium">{requester ? requester.name : 'Unknown'}</span>
-                  </p>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {asset ? (
+                        <Link
+                          to={`/assets/${asset._id}`}
+                          className="truncate text-sm font-bold text-gray-900 hover:text-brand-600"
+                        >
+                          {asset.name}
+                        </Link>
+                      ) : (
+                        <span className="text-sm font-semibold text-gray-400">
+                          (Item no longer available)
+                        </span>
+                      )}
 
-                  <p className="mt-1 text-sm text-gray-500">
-                    {formatDate(request.startDate)} → {formatDate(request.endDate)}
-                  </p>
+                      <span
+                        className={`inline-flex items-center gap-1 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${
+                          statusConfig?.badge
+                        }`}
+                      >
+                        <StatusIcon className="h-3 w-3" />
+                        {statusConfig?.label}
+                      </span>
+                    </div>
+
+                    <div className="mt-1 flex items-center gap-2 text-xs text-gray-500">
+                      <Calendar className="h-3.5 w-3.5 text-gray-400" />
+                      <span>
+                        Borrow Period: {formatDate(request.startDate)} → {formatDate(request.endDate)}
+                      </span>
+                    </div>
+
+                    <div className="mt-1 flex items-center gap-1 text-xs text-gray-600">
+                      <User className="h-3.5 w-3.5 text-gray-400" />
+                      <span>Requester: </span>
+                      <span className="font-semibold text-gray-900">
+                        {requester?.name || 'Neighbor'}
+                      </span>
+                      {requester?.email && (
+                        <span className="text-gray-400 text-[11px]">({requester.email})</span>
+                      )}
+                    </div>
+                  </div>
                 </div>
 
-                {/* --- Actions: only shown for pending requests --- */}
-                {request.status === 'pending' && (
-                  <div className="flex shrink-0 gap-2">
-                    <button
-                      onClick={() => handleApprove(request._id)}
-                      disabled={isActioning}
-                      className="rounded-md bg-green-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-green-700 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isActioning ? '...' : 'Approve'}
-                    </button>
-                    <button
-                      onClick={() => handleReject(request._id)}
-                      disabled={isActioning}
-                      className="rounded-md bg-red-50 px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {isActioning ? '...' : 'Reject'}
-                    </button>
-                  </div>
-                )}
+                <div className="flex items-center gap-2 border-t border-gray-50 pt-3 sm:border-0 sm:pt-0">
+                  {request.status === 'pending' ? (
+                    <>
+                      <button
+                        onClick={() => handleApprove(request._id)}
+                        disabled={isActioning}
+                        className="flex items-center gap-1.5 rounded-xl bg-emerald-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-emerald-700 disabled:opacity-60 transition-colors"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                        <span>Approve</span>
+                      </button>
+                      <button
+                        onClick={() => handleReject(request._id)}
+                        disabled={isActioning}
+                        className="flex items-center gap-1.5 rounded-xl border border-gray-300 bg-white px-3.5 py-2 text-xs font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60 transition-colors"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                        <span>Decline</span>
+                      </button>
+                    </>
+                  ) : (
+                    <span className="text-xs text-gray-400">
+                      Decided on {formatDate(request.updatedAt)}
+                    </span>
+                  )}
+                </div>
               </div>
             );
           })}

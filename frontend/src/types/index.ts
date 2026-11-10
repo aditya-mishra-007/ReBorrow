@@ -64,6 +64,15 @@ export interface Asset {
   location?: AssetLocation;
   createdAt: string;
   updatedAt: string;
+  // Extended fields added for richer asset listings
+  condition?: 'New' | 'Like New' | 'Good' | 'Fair';
+  brand?: string;
+  borrowingCostPerDay?: number; // 0 = free
+  securityDeposit?: number;
+  pickupInstructions?: string;
+  restrictions?: string;
+  specifications?: Record<string, string>;
+  ownerRating?: number;
 }
 
 /**
@@ -169,12 +178,24 @@ export interface CreateAssetPayload {
   city?: string;
   latitude?: number;
   longitude?: number;
+  condition?: 'New' | 'Like New' | 'Good' | 'Fair';
+  brand?: string;
+  borrowingCostPerDay?: number;
+  securityDeposit?: number;
+  pickupInstructions?: string;
+  restrictions?: string;
 }
 
 export interface UpdateAssetPayload {
   name?: string;
   description?: string;
   category?: string;
+  condition?: 'New' | 'Like New' | 'Good' | 'Fair';
+  brand?: string;
+  borrowingCostPerDay?: number;
+  securityDeposit?: number;
+  pickupInstructions?: string;
+  restrictions?: string;
 }
 
 export interface CreateBorrowRequestPayload {

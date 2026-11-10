@@ -2,6 +2,7 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import compression from 'compression';
 
 import authRoutes from './routes/authRoutes';
 import assetRoutes from './routes/assetRoutes';
@@ -28,6 +29,10 @@ const app: Express = express();
 // Strict-Transport-Security, X-Frame-Options, etc.) with sane defaults.
 app.use(helmet());
 
+// Compress all HTTP responses to reduce bandwidth, especially for
+// large asset listings and image-URL-heavy payloads.
+app.use(compression());
+
 // CORS configuration: restricts which origins may call this API.
 // In production, CLIENT_URL should be set to the exact deployed
 // frontend origin (e.g., https://reborrow.app) — falling back to
@@ -47,11 +52,10 @@ app.use(
 // Body parsing middleware
 // ------------------------------------------------------------------
 
-// Limits set explicitly to guard against oversized payload attacks
-// (this app has no file uploads yet, so 100kb is generous headroom
-// for typical JSON request bodies like asset descriptions).
-app.use(express.json({ limit: '100kb' }));
-app.use(express.urlencoded({ extended: true, limit: '100kb' }));
+// Limits set higher to accommodate new extended asset fields including
+// specifications objects and longer text fields (pickupInstructions, etc.)
+app.use(express.json({ limit: '5mb' }));
+app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
 // ------------------------------------------------------------------
 // Logging middleware

@@ -242,36 +242,53 @@ export const sendMessage = async (req: AuthRequest, res: Response): Promise<void
 
     const trimmedText = text.trim();
 
-    const message = await Message.create({
-      conversation: id,
-      sender: req.user._id,
-      text: trimmedText,
-      readBy: [req.user._id],
-    });
+    // 1. Create message and update conversation in parallel
+    const [message] = await Promise.all([
+      Message.create({
+        conversation: id,
+        sender: req.user._id,
+        text: trimmedText,
+        readBy: [req.user._id],
+      }),
+      Conversation.findByIdAndUpdate(id, {
+        lastMessageAt: new Date(),
+        lastMessageText: trimmedText,
+      }),
+    ]);
 
-    conversation.lastMessageAt = new Date();
-    conversation.lastMessageText = trimmedText;
-    await conversation.save();
-
-    const populatedMessage = await Message.findById(message._id).populate('sender', 'name email');
+    // Construct populated message directly from known sender data to avoid an extra DB round-trip
+    const populatedMessage = {
+      _id: message._id,
+      conversation: message.conversation,
+      sender: {
+        _id: req.user._id,
+        name: req.user.name,
+        email: req.user.email,
+      },
+      text: message.text,
+      readBy: message.readBy,
+      createdAt: message.createdAt,
+      updatedAt: message.updatedAt,
+    };
 
     res.status(201).json({ success: true, data: populatedMessage });
 
     // --- Real-time delivery via Socket.io ---
-    // Wrapped defensively: if Socket.io hasn't initialized for any
-    // reason, chat still works via REST + polling/refresh — real-time
-    // delivery is an enhancement, not the only way messages arrive.
     try {
       const io = getIO();
-      const recipientId = conversation.participants.find(
-        (p) => p.toString() !== req.user!._id.toString()
-      );
-      if (recipientId) {
-        io.to(recipientId.toString()).emit('new_message', {
+      // Emit to conversation room (for anyone actively viewing the thread)
+      io.to(`conv:${id}`).emit('new_message', {
+        conversationId: id,
+        message: populatedMessage,
+      });
+
+      // Also emit to all participants' personal rooms (for unread badges / conversation list updates)
+      conversation.participants.forEach((p) => {
+        io.to(p.toString()).emit('new_message', {
           conversationId: id,
           message: populatedMessage,
         });
-      }
+      });
     } catch (socketError) {
       console.error('Socket emit failed (non-fatal):', socketError);
     }

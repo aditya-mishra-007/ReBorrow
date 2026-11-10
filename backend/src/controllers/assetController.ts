@@ -67,7 +67,9 @@ export const createAsset = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    const { name, description, category, city, latitude, longitude } = req.body;
+    const { name, description, category, city, latitude, longitude,
+            condition, brand, borrowingCostPerDay, securityDeposit,
+            pickupInstructions, restrictions, specifications } = req.body;
 
     if (!name || !description || !category) {
       res.status(400).json({
@@ -120,6 +122,16 @@ export const createAsset = async (req: AuthRequest, res: Response): Promise<void
       owner: req.user._id,
       images: imageUrls,
       location,
+      // Extended fields — all optional
+      ...(condition !== undefined && { condition: String(condition) }),
+      ...(brand !== undefined && { brand: String(brand).trim() }),
+      ...(borrowingCostPerDay !== undefined && { borrowingCostPerDay: Number(borrowingCostPerDay) }),
+      ...(securityDeposit !== undefined && { securityDeposit: Number(securityDeposit) }),
+      ...(pickupInstructions !== undefined && { pickupInstructions: String(pickupInstructions).trim() }),
+      ...(restrictions !== undefined && { restrictions: String(restrictions).trim() }),
+      ...(specifications !== undefined && {
+        specifications: typeof specifications === 'string' ? JSON.parse(specifications) : specifications,
+      }),
       // status intentionally omitted -> defaults to 'available'
     });
 
@@ -156,7 +168,7 @@ export const createAsset = async (req: AuthRequest, res: Response): Promise<void
  */
 export const getAssets = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { status, category, search, owner, page, limit } = req.query;
+    const { status, category, search, owner, page, limit, condition } = req.query;
 
     const filter: Record<string, unknown> = {};
 
@@ -166,6 +178,10 @@ export const getAssets = async (req: AuthRequest, res: Response): Promise<void> 
 
     if (category) {
       filter.category = { $regex: `^${String(category)}$`, $options: 'i' };
+    }
+
+    if (condition && ['New', 'Like New', 'Good', 'Fair'].includes(String(condition))) {
+      filter.condition = condition;
     }
 
     if (search) {
@@ -293,15 +309,29 @@ export const updateAsset = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    const { name, description, category } = req.body;
+    const { name, description, category,
+            condition, brand, borrowingCostPerDay, securityDeposit,
+            pickupInstructions, restrictions, specifications } = req.body;
 
     if (name !== undefined) asset.name = String(name).trim();
     if (description !== undefined) asset.description = String(description).trim();
     if (category !== undefined) asset.category = String(category).trim();
 
-    const updatedAsset = await asset.save();
+    // Extended fields
+    if (condition !== undefined) (asset as IAsset).condition = String(condition) as IAsset['condition'];
+    if (brand !== undefined) (asset as IAsset).brand = String(brand).trim();
+    if (borrowingCostPerDay !== undefined) (asset as IAsset).borrowingCostPerDay = Number(borrowingCostPerDay);
+    if (securityDeposit !== undefined) (asset as IAsset).securityDeposit = Number(securityDeposit);
+    if (pickupInstructions !== undefined) (asset as IAsset).pickupInstructions = String(pickupInstructions).trim();
+    if (restrictions !== undefined) (asset as IAsset).restrictions = String(restrictions).trim();
+    if (specifications !== undefined) {
+      (asset as IAsset).specifications = typeof specifications === 'string'
+        ? JSON.parse(specifications)
+        : specifications;
+      asset.markModified('specifications');
+    }
 
-    res.status(200).json({
+    const updatedAsset = await asset.save();    res.status(200).json({
       success: true,
       message: 'Asset updated successfully',
       data: updatedAsset,

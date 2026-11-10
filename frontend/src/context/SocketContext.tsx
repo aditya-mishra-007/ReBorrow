@@ -20,6 +20,12 @@ import { TOKEN_STORAGE_KEY } from '@/lib/api';
  * The socket URL is derived the same way as the REST API's base URL
  * (VITE_API_URL) — but Socket.io connects to the server's ORIGIN, not
  * a '/api'-suffixed path, so we strip that suffix if present.
+ *
+ * FIX: socket is stored in useState (reactive) so consumers re-render
+ * when it connects, AND in useRef (for stable cleanup). Previously,
+ * only useRef was used and passed directly to context — which meant
+ * consumers always received null since ref mutations don't trigger
+ * re-renders.
  */
 
 interface SocketContextValue {
@@ -34,17 +40,15 @@ function getSocketUrl(): string {
   // Strip a trailing '/api' if present, since Socket.io connects to
   // the server's base origin, not a REST-style sub-path. In local
   // dev, VITE_API_URL is typically unset, so we fall back to
-  // connecting to the same origin Vite is proxying from (works
-  // automatically because Socket.io, like axios, respects the Vite
-  // dev proxy when given a relative/empty URL... actually Socket.io
-  // needs an explicit origin, so we fall back to localhost:5000
-  // directly for local dev, matching the backend's default PORT).
+  // connecting to localhost:5000 directly (matching the backend's
+  // default PORT).
   if (!apiUrl) return 'http://localhost:5000';
   return apiUrl.replace(/\/api\/?$/, '');
 }
 
 export function SocketProvider({ children }: { children: ReactNode }) {
   const { isAuthenticated } = useAuth();
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const socketRef = useRef<Socket | null>(null);
 
@@ -54,6 +58,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
+        setSocket(null);
         setIsConnected(false);
       }
       return;
@@ -62,28 +67,47 @@ export function SocketProvider({ children }: { children: ReactNode }) {
     const token = localStorage.getItem(TOKEN_STORAGE_KEY);
     if (!token) return;
 
-    const socket = io(getSocketUrl(), {
+    // Avoid creating duplicate connections if one is already active.
+    if (socketRef.current?.connected) return;
+
+    const newSocket = io(getSocketUrl(), {
       auth: { token },
       transports: ['websocket', 'polling'],
+      reconnection: true,
+      reconnectionAttempts: 5,
+      reconnectionDelay: 1000,
+      timeout: 10000,
     });
 
-    socket.on('connect', () => setIsConnected(true));
-    socket.on('disconnect', () => setIsConnected(false));
-    socket.on('connect_error', (err) => {
+    newSocket.on('connect', () => {
+      setIsConnected(true);
+      // KEY FIX: update state on connect so all consumers re-render
+      // and receive the live socket reference (not null).
+      setSocket(newSocket);
+    });
+    newSocket.on('disconnect', () => {
+      setIsConnected(false);
+    });
+    newSocket.on('connect_error', (err) => {
       console.error('Socket connection error:', err.message);
       setIsConnected(false);
     });
 
-    socketRef.current = socket;
+    socketRef.current = newSocket;
+    // Also set immediately so the socket is available to consumers
+    // before the 'connect' event fires (e.g. for emitting pre-connect
+    // messages that socket.io queues internally).
+    setSocket(newSocket);
 
     return () => {
-      socket.disconnect();
+      newSocket.disconnect();
       socketRef.current = null;
+      setSocket(null);
     };
   }, [isAuthenticated]);
 
   return (
-    <SocketContext.Provider value={{ socket: socketRef.current, isConnected }}>
+    <SocketContext.Provider value={{ socket, isConnected }}>
       {children}
     </SocketContext.Provider>
   );

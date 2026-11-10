@@ -1,39 +1,30 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
 import { useSocket } from '@/context/SocketContext';
 import * as messageApi from '@/api/messageApi';
+import {
+  Menu,
+  X,
+  MessageSquare,
+  PlusCircle,
+  Package,
+  ArrowUpRight,
+  Inbox,
+  ShieldCheck,
+  LogOut,
+  User as UserIcon,
+  Sparkles,
+} from 'lucide-react';
 
-/**
- * Navbar.tsx
- * ------------------------------------------------------------------
- * Top navigation bar, rendered once via Layout.tsx for every route.
- * Conditionally renders different links based on authentication state:
- *   - Logged out: Browse, Login, Register
- *   - Logged in:  Browse, List an Item, My Assets, My Requests,
- *                 Incoming Requests, user's name + Logout
- *
- * Includes a responsive mobile menu (hamburger toggle) since this is
- * the one component that appears on literally every page, so it needs
- * to work cleanly across all viewport sizes from day one.
- */
 export default function Navbar() {
   const { user, isAuthenticated, logout } = useAuth();
   const { socket } = useSocket();
   const navigate = useNavigate();
+  const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  /**
-   * Unread message badge
-   * ------------------------------------------------------------------
-   * Fetches the total unread count once on login, then increments
-   * live whenever a 'new_message' socket event arrives — rather than
-   * re-fetching the full conversation list on every message (which
-   * MessagesPage does for its own more detailed needs), this just
-   * bumps a simple counter for the nav badge, which is cheap and
-   * avoids an unnecessary REST call on every single incoming message.
-   */
   useEffect(() => {
     if (!isAuthenticated) {
       setUnreadCount(0);
@@ -46,7 +37,7 @@ export default function Navbar() {
         const total = data.reduce((sum, c) => sum + (c.unreadCount || 0), 0);
         setUnreadCount(total);
       } catch {
-        // Non-critical — badge just won't show an initial count.
+        // Non-critical
       }
     })();
   }, [isAuthenticated]);
@@ -64,14 +55,6 @@ export default function Navbar() {
     };
   }, [socket]);
 
-  /**
-   * handleLogout
-   * ------------------------------------------------------------------
-   * Calls the context's logout() (clears token + user state), then
-   * navigates to home. Navigation lives here (not in AuthContext)
-   * since routing is a UI concern — AuthContext stays router-agnostic,
-   * which also keeps it independently testable without a Router wrapper.
-   */
   const handleLogout = () => {
     logout();
     setIsMobileMenuOpen(false);
@@ -79,44 +62,67 @@ export default function Navbar() {
   };
 
   const closeMobileMenu = () => setIsMobileMenuOpen(false);
+  const isActive = (path: string) => location.pathname === path;
 
   return (
-    <header className="sticky top-0 z-40 border-b border-gray-200 bg-white/95 backdrop-blur">
-      <nav className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
-        {/* --- Logo / Home link --- */}
-        <Link to="/" className="text-xl font-bold text-brand-700" onClick={closeMobileMenu}>
-          ReBorrow
+    <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/90 backdrop-blur-md transition-all">
+      <nav className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3.5 sm:px-6 lg:px-8">
+        {/* --- Logo --- */}
+        <Link
+          to="/"
+          className="group flex items-center gap-2.5 text-xl font-bold tracking-tight text-gray-900 transition-colors"
+          onClick={closeMobileMenu}
+        >
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600 text-white shadow-sm transition-transform group-hover:scale-105">
+            <Sparkles className="h-5 w-5" />
+          </div>
+          <span className="bg-gradient-to-r from-gray-900 via-brand-900 to-brand-700 bg-clip-text text-transparent font-extrabold">
+            ReBorrow
+          </span>
         </Link>
 
-        {/* --- Desktop nav links --- */}
-        <div className="hidden items-center gap-6 md:flex">
-          <Link to="/" className="text-sm font-medium text-gray-700 hover:text-brand-600">
+        {/* --- Desktop Navigation --- */}
+        <div className="hidden items-center gap-1 lg:gap-2 md:flex">
+          <Link
+            to="/"
+            className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+              isActive('/')
+                ? 'bg-brand-50 text-brand-700'
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+            }`}
+          >
             Browse
           </Link>
 
           {isAuthenticated ? (
             <>
               <Link
-                to="/assets/new"
-                className="text-sm font-medium text-gray-700 hover:text-brand-600"
-              >
-                List an Item
-              </Link>
-              <Link
                 to="/my-assets"
-                className="text-sm font-medium text-gray-700 hover:text-brand-600"
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  isActive('/my-assets')
+                    ? 'bg-brand-50 text-brand-700'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
               >
                 My Assets
               </Link>
               <Link
                 to="/my-requests"
-                className="text-sm font-medium text-gray-700 hover:text-brand-600"
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  isActive('/my-requests')
+                    ? 'bg-brand-50 text-brand-700'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
               >
                 My Requests
               </Link>
               <Link
                 to="/incoming-requests"
-                className="text-sm font-medium text-gray-700 hover:text-brand-600"
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  isActive('/incoming-requests')
+                    ? 'bg-brand-50 text-brand-700'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
               >
                 Incoming
               </Link>
@@ -124,11 +130,18 @@ export default function Navbar() {
               <Link
                 to="/messages"
                 onClick={() => setUnreadCount(0)}
-                className="relative text-sm font-medium text-gray-700 hover:text-brand-600"
+                className={`relative rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  isActive('/messages')
+                    ? 'bg-brand-50 text-brand-700'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
               >
-                Messages
+                <span className="flex items-center gap-1.5">
+                  <MessageSquare className="h-4 w-4" />
+                  Messages
+                </span>
                 {unreadCount > 0 && (
-                  <span className="absolute -right-3 -top-2 rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
+                  <span className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand-600 px-1 text-[10px] font-bold text-white shadow-sm ring-2 ring-white">
                     {unreadCount > 9 ? '9+' : unreadCount}
                   </span>
                 )}
@@ -137,112 +150,130 @@ export default function Navbar() {
               {user?.role === 'admin' && (
                 <Link
                   to="/admin"
-                  className="text-sm font-medium text-purple-600 hover:text-purple-700"
+                  className={`flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-purple-700 transition-colors ${
+                    isActive('/admin') ? 'bg-purple-50' : 'hover:bg-purple-50/60'
+                  }`}
                 >
+                  <ShieldCheck className="h-4 w-4" />
                   Admin
                 </Link>
               )}
 
-              <div className="ml-2 flex items-center gap-3 border-l border-gray-200 pl-6">
-                <span className="text-sm text-gray-500">
-                  Hi, <span className="font-medium text-gray-800">{user?.name}</span>
-                </span>
-                <button
-                  onClick={handleLogout}
-                  className="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-200"
+              <div className="ml-2 flex items-center gap-3 border-l border-gray-200 pl-4">
+                <Link
+                  to="/assets/new"
+                  className="flex items-center gap-1.5 rounded-lg bg-brand-600 px-3.5 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-brand-700 active:scale-98"
                 >
-                  Logout
-                </button>
+                  <PlusCircle className="h-4 w-4" />
+                  <span>List Item</span>
+                </Link>
+
+                <div className="flex items-center gap-2 rounded-full border border-gray-200 bg-gray-50/80 py-1 pl-2.5 pr-1.5">
+                  <span className="max-w-[120px] truncate text-xs font-semibold text-gray-800">
+                    {user?.name}
+                  </span>
+                  <button
+                    onClick={handleLogout}
+                    title="Sign out"
+                    className="flex h-7 w-7 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-gray-200 hover:text-gray-900"
+                  >
+                    <LogOut className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               </div>
             </>
           ) : (
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 pl-2">
               <Link
                 to="/login"
-                className="text-sm font-medium text-gray-700 hover:text-brand-600"
+                className="rounded-lg px-3.5 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-100"
               >
-                Login
+                Log in
               </Link>
               <Link
                 to="/register"
-                className="rounded-md bg-brand-600 px-4 py-1.5 text-sm font-medium text-white transition-colors hover:bg-brand-700"
+                className="rounded-lg bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:bg-brand-700 active:scale-98"
               >
-                Sign Up
+                Sign up
               </Link>
             </div>
           )}
         </div>
 
-        {/* --- Mobile menu toggle button --- */}
+        {/* --- Mobile Menu Button --- */}
         <button
-          className="p-2 text-gray-700 md:hidden"
+          className="flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 p-1.5 text-gray-700 hover:bg-gray-100 md:hidden"
           onClick={() => setIsMobileMenuOpen((prev) => !prev)}
           aria-label={isMobileMenuOpen ? 'Close menu' : 'Open menu'}
-          aria-expanded={isMobileMenuOpen}
         >
-          {isMobileMenuOpen ? (
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          ) : (
-            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          )}
+          {isMobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </button>
       </nav>
 
-      {/* --- Mobile menu panel --- */}
+      {/* --- Mobile Dropdown Menu --- */}
       {isMobileMenuOpen && (
-        <div className="border-t border-gray-200 bg-white px-4 py-4 md:hidden">
-          <div className="flex flex-col gap-4">
-            <Link to="/" className="text-sm font-medium text-gray-700" onClick={closeMobileMenu}>
-              Browse
+        <div className="border-b border-gray-200 bg-white px-4 py-4 md:hidden">
+          <div className="flex flex-col gap-2">
+            <Link
+              to="/"
+              className={`flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium ${
+                isActive('/') ? 'bg-brand-50 text-brand-700' : 'text-gray-700 hover:bg-gray-50'
+              }`}
+              onClick={closeMobileMenu}
+            >
+              <Package className="h-4 w-4" />
+              Browse Items
             </Link>
 
             {isAuthenticated ? (
               <>
                 <Link
                   to="/assets/new"
-                  className="text-sm font-medium text-gray-700"
+                  className="flex items-center gap-2.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white"
                   onClick={closeMobileMenu}
                 >
+                  <PlusCircle className="h-4 w-4" />
                   List an Item
                 </Link>
                 <Link
                   to="/my-assets"
-                  className="text-sm font-medium text-gray-700"
+                  className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   onClick={closeMobileMenu}
                 >
+                  <Package className="h-4 w-4" />
                   My Assets
                 </Link>
                 <Link
                   to="/my-requests"
-                  className="text-sm font-medium text-gray-700"
+                  className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   onClick={closeMobileMenu}
                 >
+                  <ArrowUpRight className="h-4 w-4" />
                   My Requests
                 </Link>
                 <Link
                   to="/incoming-requests"
-                  className="text-sm font-medium text-gray-700"
+                  className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   onClick={closeMobileMenu}
                 >
+                  <Inbox className="h-4 w-4" />
                   Incoming Requests
                 </Link>
-
                 <Link
                   to="/messages"
-                  className="flex items-center gap-2 text-sm font-medium text-gray-700"
+                  className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
                   onClick={() => {
                     closeMobileMenu();
                     setUnreadCount(0);
                   }}
                 >
-                  Messages
+                  <span className="flex items-center gap-2.5">
+                    <MessageSquare className="h-4 w-4" />
+                    Messages
+                  </span>
                   {unreadCount > 0 && (
-                    <span className="rounded-full bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white">
-                      {unreadCount > 9 ? '9+' : unreadCount}
+                    <span className="rounded-full bg-brand-600 px-2 py-0.5 text-xs font-bold text-white">
+                      {unreadCount}
                     </span>
                   )}
                 </Link>
@@ -250,36 +281,47 @@ export default function Navbar() {
                 {user?.role === 'admin' && (
                   <Link
                     to="/admin"
-                    className="text-sm font-medium text-purple-600"
+                    className="flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-purple-700 hover:bg-purple-50"
                     onClick={closeMobileMenu}
                   >
+                    <ShieldCheck className="h-4 w-4" />
                     Admin Dashboard
                   </Link>
                 )}
 
-                <div className="flex items-center justify-between border-t border-gray-200 pt-4">
-                  <span className="text-sm text-gray-500">
-                    Hi, <span className="font-medium text-gray-800">{user?.name}</span>
-                  </span>
+                <div className="mt-2 flex items-center justify-between border-t border-gray-100 pt-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-100 font-semibold text-brand-700">
+                      {user?.name?.charAt(0) || <UserIcon className="h-4 w-4" />}
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">{user?.name}</p>
+                      <p className="text-xs text-gray-400">{user?.email}</p>
+                    </div>
+                  </div>
                   <button
                     onClick={handleLogout}
-                    className="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700"
+                    className="rounded-lg bg-gray-100 px-3 py-1.5 text-xs font-semibold text-gray-700 hover:bg-gray-200"
                   >
                     Logout
                   </button>
                 </div>
               </>
             ) : (
-              <div className="flex flex-col gap-3 border-t border-gray-200 pt-4">
-                <Link to="/login" className="text-sm font-medium text-gray-700" onClick={closeMobileMenu}>
-                  Login
+              <div className="mt-2 flex flex-col gap-2 border-t border-gray-100 pt-3">
+                <Link
+                  to="/login"
+                  className="rounded-lg border border-gray-200 px-3 py-2 text-center text-sm font-medium text-gray-700 hover:bg-gray-50"
+                  onClick={closeMobileMenu}
+                >
+                  Log in
                 </Link>
                 <Link
                   to="/register"
-                  className="rounded-md bg-brand-600 px-4 py-2 text-center text-sm font-medium text-white"
+                  className="rounded-lg bg-brand-600 px-3 py-2 text-center text-sm font-medium text-white shadow-sm hover:bg-brand-700"
                   onClick={closeMobileMenu}
                 >
-                  Sign Up
+                  Create an account
                 </Link>
               </div>
             )}

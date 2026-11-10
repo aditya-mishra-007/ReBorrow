@@ -28,6 +28,15 @@ export interface IAsset extends Document {
     city?: string;
     coordinates?: [number, number]; // [longitude, latitude] — GeoJSON order, NOT [lat, lng]
   };
+  // Extended fields for richer listings
+  condition?: 'New' | 'Like New' | 'Good' | 'Fair';
+  brand?: string;
+  borrowingCostPerDay?: number; // 0 = free
+  securityDeposit?: number;
+  pickupInstructions?: string;
+  restrictions?: string;
+  specifications?: Record<string, unknown>; // key-value pairs, e.g. { "Voltage": "20V Max" }
+  ownerRating?: number; // 0–5
   createdAt: Date;
   updatedAt: Date;
 }
@@ -98,6 +107,51 @@ const AssetSchema: Schema<IAsset> = new Schema(
         },
       },
     },
+
+    // --- Extended listing fields ---
+    condition: {
+      type: String,
+      enum: {
+        values: ['New', 'Like New', 'Good', 'Fair'],
+        message: '{VALUE} is not a valid condition',
+      },
+      required: false,
+    },
+    brand: {
+      type: String,
+      trim: true,
+      maxlength: [100, 'Brand cannot exceed 100 characters'],
+    },
+    borrowingCostPerDay: {
+      type: Number,
+      min: [0, 'Borrowing cost cannot be negative'],
+    },
+    securityDeposit: {
+      type: Number,
+      min: [0, 'Security deposit cannot be negative'],
+    },
+    pickupInstructions: {
+      type: String,
+      trim: true,
+      maxlength: [500, 'Pickup instructions cannot exceed 500 characters'],
+    },
+    restrictions: {
+      type: String,
+      trim: true,
+      maxlength: [500, 'Restrictions cannot exceed 500 characters'],
+    },
+    // Mixed type allows arbitrary key-value specification objects
+    // (e.g., { "Voltage": "20V", "Weight": "1.8 kg" }). Mongoose
+    // requires markModified('specifications') before saving if you
+    // mutate this in-place (see updateAsset controller).
+    specifications: {
+      type: Schema.Types.Mixed,
+    },
+    ownerRating: {
+      type: Number,
+      min: [0, 'Owner rating cannot be less than 0'],
+      max: [5, 'Owner rating cannot exceed 5'],
+    },
   },
   {
     timestamps: true, // Automatically manages createdAt / updatedAt
@@ -118,6 +172,8 @@ AssetSchema.index({ owner: 1 });
 AssetSchema.index({ status: 1 });
 AssetSchema.index({ name: 'text', description: 'text', category: 'text' });
 AssetSchema.index({ 'location.coordinates': '2dsphere' });
+AssetSchema.index({ condition: 1 });
+AssetSchema.index({ borrowingCostPerDay: 1 });
 
 /**
  * Asset Model

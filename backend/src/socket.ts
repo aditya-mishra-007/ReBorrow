@@ -2,6 +2,7 @@ import { Server as HTTPServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import User from './models/User';
+import Conversation from './models/Conversation';
 
 /**
  * socket.ts
@@ -89,6 +90,56 @@ export function initializeSocket(httpServer: HTTPServer): SocketIOServer {
     socket.on('disconnect', () => {
       if (socket.userId) {
         console.log(`Socket disconnected: user ${socket.userId}`);
+      }
+    });
+
+    /**
+     * join_conversation
+     * ------------------------------------------------------------------
+     * Client emits this to subscribe to a conversation-specific room,
+     * enabling conversation-scoped typing events. After joining, any
+     * participant in the same conversation can receive 'typing' events
+     * targeted to that room rather than the user's personal room.
+     */
+    socket.on('join_conversation', (conversationId: string) => {
+      if (typeof conversationId === 'string' && conversationId.length > 0) {
+        socket.join(`conv:${conversationId}`);
+      }
+    });
+
+    /**
+     * typing
+     * ------------------------------------------------------------------
+     * Client emits { conversationId, isTyping } when the user starts or
+     * stops typing. We look up the Conversation to find the other
+     * participant and emit the event directly to their user room — this
+     * works even if the other user hasn't called join_conversation,
+     * since every user always joins their own userId room on connect.
+     */
+    socket.on('typing', async ({ conversationId, isTyping }: { conversationId: string; isTyping: boolean }) => {
+      if (!socket.userId || typeof conversationId !== 'string') return;
+
+      try {
+        const conversation = await Conversation.findById(conversationId).select('participants').lean();
+        if (!conversation) return;
+
+        // Find the other participant (not the sender)
+        const otherParticipantId = conversation.participants
+          .find((p) => p.toString() !== socket.userId)
+          ?.toString();
+
+        if (!otherParticipantId) return;
+
+        // Emit to the other user's personal room — always works regardless
+        // of whether they've joined the conversation room explicitly.
+        io!.to(otherParticipantId).emit('typing', {
+          conversationId,
+          userId: socket.userId,
+          isTyping,
+        });
+      } catch (err) {
+        // Non-critical — typing indicators failing silently is acceptable
+        console.error('Typing event error:', err);
       }
     });
   });
