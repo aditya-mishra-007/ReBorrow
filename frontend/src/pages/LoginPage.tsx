@@ -3,16 +3,22 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
-import { getErrorMessage } from '@/lib/api';
+import { getErrorMessage, warmUpBackend } from '@/lib/api';
 import type { LoginPayload } from '@/types';
 import ReBorrowLogo from '@/components/ReBorrowLogo';
-import { ArrowRight, Lock, Mail } from 'lucide-react';
+import { ArrowRight, Lock, Mail, Loader2 } from 'lucide-react';
 
 export default function LoginPage() {
   const { login, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isWakingServer, setIsWakingServer] = useState(false);
+
+  // Proactively warm up backend container on mount
+  useEffect(() => {
+    warmUpBackend();
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -30,14 +36,23 @@ export default function LoginPage() {
 
   const onSubmit = async (data: LoginPayload) => {
     setIsSubmitting(true);
+    setIsWakingServer(false);
+    const wakeTimer = setTimeout(() => {
+      setIsWakingServer(true);
+    }, 1800);
+
     try {
       await login(data);
+      clearTimeout(wakeTimer);
       toast.success('Welcome back!');
       navigate(from, { replace: true });
     } catch (error) {
+      clearTimeout(wakeTimer);
       toast.error(getErrorMessage(error));
     } finally {
+      clearTimeout(wakeTimer);
       setIsSubmitting(false);
+      setIsWakingServer(false);
     }
   };
 
@@ -108,8 +123,17 @@ export default function LoginPage() {
             disabled={isSubmitting}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 py-3 text-xs font-bold text-white shadow-md transition-all hover:bg-brand-700 active:scale-98 disabled:opacity-50"
           >
-            <span>{isSubmitting ? 'Signing in...' : 'Sign In'}</span>
-            <ArrowRight className="h-4 w-4" />
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>{isWakingServer ? 'Connecting to server...' : 'Signing in...'}</span>
+              </>
+            ) : (
+              <>
+                <span>Sign In</span>
+                <ArrowRight className="h-4 w-4" />
+              </>
+            )}
           </button>
         </form>
 

@@ -3,15 +3,20 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import toast from 'react-hot-toast';
 import { useAuth } from '@/context/AuthContext';
-import { getErrorMessage } from '@/lib/api';
+import { getErrorMessage, warmUpBackend } from '@/lib/api';
 import type { RegisterPayload } from '@/types';
 import ReBorrowLogo from '@/components/ReBorrowLogo';
-import { ArrowRight, Lock, Mail, User } from 'lucide-react';
+import { ArrowRight, Lock, Mail, User, Loader2 } from 'lucide-react';
 
 export default function RegisterPage() {
   const { register: registerUser, isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isWakingServer, setIsWakingServer] = useState(false);
+
+  useEffect(() => {
+    warmUpBackend();
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -27,14 +32,23 @@ export default function RegisterPage() {
 
   const onSubmit = async (data: RegisterPayload) => {
     setIsSubmitting(true);
+    setIsWakingServer(false);
+    const wakeTimer = setTimeout(() => {
+      setIsWakingServer(true);
+    }, 1800);
+
     try {
       await registerUser(data);
+      clearTimeout(wakeTimer);
       toast.success('Account created! Welcome to ReBorrow.');
       navigate('/', { replace: true });
     } catch (error) {
+      clearTimeout(wakeTimer);
       toast.error(getErrorMessage(error));
     } finally {
+      clearTimeout(wakeTimer);
       setIsSubmitting(false);
+      setIsWakingServer(false);
     }
   };
 
@@ -128,8 +142,17 @@ export default function RegisterPage() {
             disabled={isSubmitting}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-600 py-3 text-xs font-bold text-white shadow-md transition-all hover:bg-brand-700 active:scale-98 disabled:opacity-50"
           >
-            <span>{isSubmitting ? 'Creating account...' : 'Create Account'}</span>
-            <ArrowRight className="h-4 w-4" />
+            {isSubmitting ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>{isWakingServer ? 'Connecting to server...' : 'Creating account...'}</span>
+              </>
+            ) : (
+              <>
+                <span>Create Account</span>
+                <ArrowRight className="h-4 w-4" />
+              </>
+            )}
           </button>
         </form>
 

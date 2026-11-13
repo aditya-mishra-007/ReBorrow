@@ -8,7 +8,7 @@ import {
 } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useAuth } from '@/context/AuthContext';
-import { TOKEN_STORAGE_KEY } from '@/lib/api';
+import { getValidToken } from '@/lib/api';
 
 /**
  * SocketContext.tsx
@@ -64,7 +64,7 @@ export function SocketProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    const token = getValidToken();
     if (!token) return;
 
     // Avoid creating duplicate connections if one is already active.

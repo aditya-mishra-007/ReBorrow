@@ -7,7 +7,13 @@ import {
   ReactNode,
 } from 'react';
 import * as authApi from '@/api/authApi';
-import { TOKEN_STORAGE_KEY } from '@/lib/api';
+import {
+  TOKEN_STORAGE_KEY,
+  USER_STORAGE_KEY,
+  getValidToken,
+  getCachedUser,
+  clearAuthStorage,
+} from '@/lib/api';
 import type { LoginPayload, RegisterPayload, User } from '@/types';
 
 /**
@@ -17,18 +23,13 @@ import type { LoginPayload, RegisterPayload, User } from '@/types';
  *   - The current authenticated user (or null if logged out)
  *   - The JWT's persistence in localStorage
  *   - login/register/logout actions
- *   - A loading flag for the initial "rehydrate session from token"
- *     check that runs once on app mount
- *
- * This is the ONLY place in the app that directly manages auth state.
- * Every component accesses it via the `useAuth()` hook at the bottom
- * of this file — never via importing this context directly.
+ *   - Instant synchronous initialization to prevent 5s+ cold-start delays
  */
 
 interface AuthContextValue {
   user: User | null;
   isAuthenticated: boolean;
-  isLoading: boolean; // true only during the initial session-rehydration check
+  isLoading: boolean;
   login: (payload: LoginPayload) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => void;
@@ -41,27 +42,30 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null);
-  // Starts true: we don't know yet if a persisted token is valid until
-  // we've attempted to fetch the current user with it.
-  const [isLoading, setIsLoading] = useState(true);
+  // Synchronous initialization: reads cached valid user immediately (0ms).
+  const [user, setUser] = useState<User | null>(() => {
+    return getCachedUser();
+  });
+
+  // Only true if we have a token but haven't cached the user yet.
+  // For unauthenticated visitors, isLoading is immediately false (0ms redirect).
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    const token = getValidToken();
+    if (!token) return false;
+    return !getCachedUser();
+  });
 
   /**
-   * Session rehydration
+   * Session rehydration (Stale-While-Revalidate)
    * ------------------------------------------------------------------
-   * Runs once on mount. If a token exists in localStorage (e.g., from
-   * a previous session, surviving a page refresh), attempt to fetch
-   * the current user with it. If the token is invalid/expired, the
-   * axios response interceptor (lib/api.ts) will already have cleared
-   * it and redirected to /login on the resulting 401 — so we don't
-   * need to duplicate that cleanup here, just handle the local loading
-   * state and swallow the error (it's already been handled globally).
+   * Runs in the background on mount. Validates token with backend.
    */
   useEffect(() => {
     const rehydrateSession = async () => {
-      const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+      const token = getValidToken();
 
       if (!token) {
+        setUser(null);
         setIsLoading(false);
         return;
       }
@@ -69,10 +73,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       try {
         const { data } = await authApi.getCurrentUser();
         setUser(data);
+        localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(data));
       } catch {
-        // Token was invalid/expired — the response interceptor already
-        // cleared it from localStorage and redirected if necessary.
-        // Nothing further to do here.
+        clearAuthStorage();
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
@@ -81,60 +85,36 @@ export function AuthProvider({ children }: AuthProviderProps) {
     rehydrateSession();
   }, []);
 
-  /**
-   * login
-   * ------------------------------------------------------------------
-   * Calls the login API, persists the returned token, and updates
-   * local user state. Throws on failure (via axios rejecting the
-   * promise) so the calling component's own try-catch can surface a
-   * toast with getErrorMessage(error) — this function does NOT catch
-   * errors itself, keeping error-display logic in the UI layer where
-   * it belongs.
-   */
   const login = useCallback(async (payload: LoginPayload) => {
     const response = await authApi.login(payload);
     localStorage.setItem(TOKEN_STORAGE_KEY, response.token);
-    setUser({
-      _id: response.data._id,
-      name: response.data.name,
-      email: response.data.email,
-      role: response.data.role,
-      createdAt: '', // Not returned by login/register; irrelevant for immediate post-auth UI
-    });
-  }, []);
-
-  /**
-   * register
-   * ------------------------------------------------------------------
-   * Identical pattern to login — the backend's registerUser controller
-   * returns the same { data, token } shape as loginUser, so a
-   * successful registration immediately logs the user in without
-   * requiring a separate login step.
-   */
-  const register = useCallback(async (payload: RegisterPayload) => {
-    const response = await authApi.register(payload);
-    localStorage.setItem(TOKEN_STORAGE_KEY, response.token);
-    setUser({
+    const userData: User = {
       _id: response.data._id,
       name: response.data.name,
       email: response.data.email,
       role: response.data.role,
       createdAt: '',
-    });
+    };
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
+    setUser(userData);
   }, []);
 
-  /**
-   * logout
-   * ------------------------------------------------------------------
-   * Clears the token and resets user state. Deliberately synchronous
-   * and side-effect-minimal (no API call — there's no server-side
-   * session to invalidate with stateless JWTs). The calling component
-   * is responsible for navigating away (e.g., to '/' or '/login')
-   * after calling this, since navigation is a routing concern, not an
-   * auth-state concern.
-   */
+  const register = useCallback(async (payload: RegisterPayload) => {
+    const response = await authApi.register(payload);
+    localStorage.setItem(TOKEN_STORAGE_KEY, response.token);
+    const userData: User = {
+      _id: response.data._id,
+      name: response.data.name,
+      email: response.data.email,
+      role: response.data.role,
+      createdAt: '',
+    };
+    localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(userData));
+    setUser(userData);
+  }, []);
+
   const logout = useCallback(() => {
-    localStorage.removeItem(TOKEN_STORAGE_KEY);
+    clearAuthStorage();
     setUser(null);
   }, []);
 

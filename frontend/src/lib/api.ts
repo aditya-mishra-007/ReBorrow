@@ -1,5 +1,5 @@
 import axios, { AxiosError, AxiosInstance, InternalAxiosRequestConfig } from 'axios';
-import type { ApiErrorResponse } from '@/types';
+import type { ApiErrorResponse, User } from '@/types';
 
 /**
  * api.ts
@@ -8,56 +8,108 @@ import type { ApiErrorResponse } from '@/types';
  * call in the app (auth, assets, borrow requests) goes through this
  * single configured instance rather than importing raw `axios` and
  * repeating base URL / header / error-handling logic in every file.
- *
- * Responsibilities:
- *   1. Set a consistent base URL (relative '/api' in dev, thanks to
- *      the Vite proxy configured in vite.config.ts; absolute URL via
- *      env var in production).
- *   2. Request interceptor: automatically attach the JWT (from
- *      localStorage) to every outgoing request's Authorization header.
- *   3. Response interceptor: on a 401 (token invalid/expired), clear
- *      stale auth state and redirect to /login — centralizing this
- *      logic here means individual components never need to manually
- *      check for 401s themselves.
  */
 
-/**
- * Base URL resolution:
- * - In development, VITE_API_URL is typically unset, so we fall back
- *   to the relative '/api' path, which Vite's dev server proxy
- *   forwards to http://localhost:5000 (see vite.config.ts).
- * - In production, VITE_API_URL should be set to the deployed
- *   backend's absolute URL (e.g., https://api.reborrow.app/api),
- *   since there's no dev-server proxy available in a static production build.
- */
 const API_BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
-/**
- * localStorage key under which the JWT is persisted. Centralized as a
- * constant so AuthContext.tsx (which also reads/writes this key) and
- * this file never risk drifting out of sync on the key name.
- */
 export const TOKEN_STORAGE_KEY = 'reborrow_token';
+export const USER_STORAGE_KEY = 'reborrow_user';
+
+/**
+ * Checks if a JWT token is expired without sending a network request.
+ * Decodes the base64 payload in 0ms.
+ */
+export function isTokenExpired(token: string): boolean {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3 || !parts[1]) return true;
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map((c) => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const payload = JSON.parse(jsonPayload);
+    if (!payload.exp) return false;
+    // Buffer by 10 seconds to avoid edge-of-expiry race conditions
+    return payload.exp * 1000 <= Date.now() + 10000;
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Clears authentication tokens and cached user data from localStorage.
+ */
+export function clearAuthStorage(): void {
+  localStorage.removeItem(TOKEN_STORAGE_KEY);
+  localStorage.removeItem(USER_STORAGE_KEY);
+}
+
+/**
+ * Returns the token if it exists and is not expired; otherwise cleans up storage.
+ */
+export function getValidToken(): string | null {
+  const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+  if (!token) {
+    localStorage.removeItem(USER_STORAGE_KEY);
+    return null;
+  }
+  if (isTokenExpired(token)) {
+    clearAuthStorage();
+    return null;
+  }
+  return token;
+}
+
+/**
+ * Returns cached user data if a valid token exists.
+ */
+export function getCachedUser(): User | null {
+  const token = getValidToken();
+  if (!token) return null;
+  try {
+    const raw = localStorage.getItem(USER_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as User) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Warm up backend on cold-start hosts (e.g. Render free tier).
+ * Non-blocking fire-and-forget fetch to /api/health.
+ */
+let hasWarmedUp = false;
+export function warmUpBackend(): void {
+  if (hasWarmedUp) return;
+  hasWarmedUp = true;
+  try {
+    const target = API_BASE_URL.startsWith('http')
+      ? `${API_BASE_URL.replace(/\/api\/?$/, '')}/api/health`
+      : '/api/health';
+    fetch(target, { method: 'GET', cache: 'no-store', keepalive: true }).catch(() => {});
+  } catch {
+    // Non-critical
+  }
+}
+
+// Trigger warmup immediately upon script evaluation
+warmUpBackend();
 
 const api: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000, // 15s — generous enough for slower connections, but prevents indefinitely hanging requests
+  timeout: 15000,
 });
 
-/**
- * Request interceptor
- * ------------------------------------------------------------------
- * Attaches `Authorization: Bearer <token>` to every outgoing request
- * if a token exists in localStorage. Runs before every single request
- * made through this `api` instance, so individual API functions
- * (authApi.ts, assetApi.ts, etc.) never need to manually set this header.
- */
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+    const token = getValidToken();
 
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
@@ -68,36 +120,12 @@ api.interceptors.request.use(
   (error: AxiosError) => Promise.reject(error)
 );
 
-/**
- * Response interceptor
- * ------------------------------------------------------------------
- * Global handling for authentication failures. If the backend ever
- * responds with 401 (token missing, invalid, expired, or user
- * deleted — see authMiddleware.ts's `protect`), we:
- *   1. Clear the stale token from localStorage
- *   2. Hard-redirect to /login
- *
- * We use a hard redirect (window.location.href) rather than
- * react-router's navigate() here deliberately — this interceptor lives
- * outside the React component tree/render cycle, so it has no access
- * to router context. A hard redirect also has the useful side effect
- * of fully resetting all in-memory React state (AuthContext, any
- * stale component state), which is exactly what we want after an
- * auth failure.
- *
- * We deliberately do NOT redirect on 403 (Forbidden) — that means the
- * user IS authenticated but lacks permission for a specific action
- * (e.g., trying to approve someone else's borrow request), which
- * should be surfaced as an inline error message, not a forced logout.
- */
 api.interceptors.response.use(
   (response) => response,
   (error: AxiosError<ApiErrorResponse>) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      clearAuthStorage();
 
-      // Avoid an infinite redirect loop if the 401 happens to originate
-      // from a request made while already on the login page.
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }
